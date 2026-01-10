@@ -3,7 +3,7 @@ export async function handler(event) {
     const { content } = JSON.parse(event.body);
 
     const response = await fetch(
-      "https://api-inference.huggingface.co/models/facebook/bart-large-cnn",
+      "https://router.huggingface.co/hf-inference/models/facebook/bart-large-cnn",
       {
         method: "POST",
         headers: {
