@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AuthPage from "./auth/login";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./layout/ProtectedRoute";
+import Analytics from "./pages/Analytics";
+
+
 
 function App() {
   const isLoggedIn = localStorage.getItem("isLoggedIn");
@@ -13,6 +16,7 @@ function App() {
           path="/"
           element={<Navigate to={isLoggedIn ? "/dashboard" : "/auth"} />}
         />
+        <Route path="/analytics" element={<Analytics />} />
 
         <Route path="/auth" element={<AuthPage />} />
 

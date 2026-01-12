@@ -18,145 +18,168 @@ export default function Dashboard() {
   const [editingId, setEditingId] = useState(null);
 
   const [isHydrated, setIsHydrated] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+
   useEffect(() => {
-  if (!userEmail) return;
+    if (!userEmail) return;
 
-  const storedNotes = localStorage.getItem(notesKey);
+    const storedNotes = localStorage.getItem(notesKey);
 
-  if (storedNotes && JSON.parse(storedNotes).length > 0) {
-    setNotes(JSON.parse(storedNotes));
-  } else {
-    const defaultNotes = [
-      {
-        id: Date.now(),
-        title: "Welcome Note",
-        content: "This is your personal notes space.",
-        date: new Date().toISOString().split("T")[0],
-        summary: "Personal notes initialized",
-      },
-    ];
+    if (storedNotes && JSON.parse(storedNotes).length > 0) {
+      setNotes(JSON.parse(storedNotes));
+    } else {
+      const defaultNotes = [
+        {
+          id: Date.now(),
+          title: "Welcome Note",
+          content: "This is your personal notes space.",
+          date: new Date().toISOString().split("T")[0],
+          summary: "Personal notes initialized",
+        },
+      ];
 
-    setNotes(defaultNotes);
-    localStorage.setItem(notesKey, JSON.stringify(defaultNotes));
-  }
+      setNotes(defaultNotes);
+      localStorage.setItem(notesKey, JSON.stringify(defaultNotes));
+    }
 
-  setIsHydrated(true);
-}, [userEmail, notesKey]);
+    setIsHydrated(true);
+  }, [userEmail, notesKey]);
 
-useEffect(() => {
-  if (isHydrated && userEmail) {
-    localStorage.setItem(notesKey, JSON.stringify(notes));
-  }
-}, [notes, isHydrated, userEmail, notesKey]);
+  useEffect(() => {
+    if (isHydrated && userEmail) {
+      localStorage.setItem(notesKey, JSON.stringify(notes));
+    }
+  }, [notes, isHydrated, userEmail, notesKey]);
 
-useEffect(() => {
-  if (notes.length > 0 && !selectedNote) {
-    setSelectedNote(notes[0]);
-  }
-}, [notes]);
+  useEffect(() => {
+    if (notes.length > 0 && !selectedNote) {
+      setSelectedNote(notes[0]);
+    }
+  }, [notes]);
   const handleLogout = () => {
-  localStorage.removeItem("isLoggedIn");
-  localStorage.removeItem("userEmail");
-  navigate("/auth");
-};
+    localStorage.removeItem("isLoggedIn");
+    localStorage.removeItem("userEmail");
+    navigate("/auth");
+  };
 
   const handleSummarize = async (note) => {
-  try {
-    const aiSummary = await summarizeWithAI(note.content);
+    if (aiLoading) return; // double click protection
 
-    const updatedNotes = notes.map(n =>
-      n.id === note.id
-        ? { ...n, summary: aiSummary }
-        : n
-    );
+    try {
+      setAiLoading(true);
 
-    setNotes(updatedNotes);
-    setSelectedNote(
-      updatedNotes.find(n => n.id === note.id)
-    );
-  } catch (error) {
-    console.error(error);
-    alert("AI summarization failed. Check API key or quota.");
-  }
-};
+      const aiSummary = await summarizeWithAI(note.content);
 
+      const updatedNotes = notes.map((n) =>
+        n.id === note.id ? { ...n, summary: aiSummary } : n
+      );
 
+      setNotes(updatedNotes);
+      setSelectedNote(updatedNotes.find((n) => n.id === note.id));
+    } catch (error) {
+      console.error(error);
+      alert("AI summarization failed. Please try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
-const handleAddNote = () => {
-  if (!newNoteTitle || !newNoteContent) return;
+  const handleAddNote = () => {
+    if (!newNoteTitle || !newNoteContent) return;
 
-  if (isEditing) {
-    const updatedNotes = notes.map(note =>
-      note.id === editingId
-        ? {
-  ...note,
-  title: newNoteTitle,
-  content: newNoteContent,
-  summary: 'Click summarize to generate AI summary'
-}
+    if (isEditing) {
+      const updatedNotes = notes.map((note) =>
+        note.id === editingId
+          ? {
+              ...note,
+              title: newNoteTitle,
+              content: newNoteContent,
+              summary: "Click summarize to generate AI summary",
+            }
+          : note
+      );
 
-        : note
-    );
+      setNotes(updatedNotes);
+      setSelectedNote(updatedNotes.find((note) => note.id === editingId));
+      setIsEditing(false);
+      setEditingId(null);
+    } else {
+      const newNote = {
+        id: Date.now(), // 🔥 IMPORTANT (unique id)
+        title: newNoteTitle,
+        content: newNoteContent,
+        date: new Date().toISOString().split("T")[0],
+        summary: "Click summarize to generate AI summary",
+      };
 
-    setNotes(updatedNotes);
-    setSelectedNote(
-      updatedNotes.find(note => note.id === editingId)
-    );
-    setIsEditing(false);
-    setEditingId(null);
-  } else {
-    const newNote = {
-      id: Date.now(), // 🔥 IMPORTANT (unique id)
-      title: newNoteTitle,
-      content: newNoteContent,
-      date: new Date().toISOString().split('T')[0],
-      summary: 'Click summarize to generate AI summary'
-    };
+      setNotes([newNote, ...notes]);
+      setSelectedNote(newNote);
+    }
 
-    setNotes([newNote, ...notes]);
-    setSelectedNote(newNote);
-  }
-
-  // 🔥 RESET FORM (THIS WAS MISSING)
-  setNewNoteTitle('');
-  setNewNoteContent('');
-  setShowNewNote(false);
-};
-
+    // 🔥 RESET FORM (THIS WAS MISSING)
+    setNewNoteTitle("");
+    setNewNoteContent("");
+    setShowNewNote(false);
+  };
 
   const handleDeleteNote = (id) => {
-    setNotes(notes.filter(note => note.id !== id));
+    setNotes(notes.filter((note) => note.id !== id));
     setSelectedNote(null);
   };
-const summarizeWithAI = async (content) => {
-  const response = await fetch("/.netlify/functions/summarize", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
+  const summarizeWithAI = async (content) => {
+    const response = await fetch(
+      "https://router.huggingface.co/hf-inference/models/facebook/bart-large-cnn",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_HF_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ inputs: content }),
+      }
+    );
 
-  const data = await response.json();
+    // 🔥 FIRST read as TEXT (safe)
+    const text = await response.text();
 
-  if (data.error) throw new Error(data.error);
+    // 🔍 Debug (optional but useful)
+    console.log("HF raw response:", text);
 
-  return data[0].summary_text;
-};
+    if (!text) {
+      throw new Error("Empty response from AI");
+    }
 
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Invalid JSON from AI");
+    }
 
+    // HF error format
+    if (data.error) {
+      throw new Error(data.error);
+    }
 
+    // Expected HF success format
+    if (!Array.isArray(data) || !data[0]?.summary_text) {
+      throw new Error("Unexpected AI response format");
+    }
 
+    return data[0].summary_text;
+  };
 
   return (
     <>
-      <link 
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" 
+      <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
         rel="stylesheet"
       />
-      <link 
-        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
+      <link
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         rel="stylesheet"
       />
-      
+
       <style>{`
         body {
           background: #f5f7fa;
@@ -249,7 +272,6 @@ const summarizeWithAI = async (content) => {
           margin-bottom: 20px;
         }
       `}</style>
-
       <div className="dashboard-container">
         {/* Navbar */}
         <nav className="navbar navbar-custom navbar-dark">
@@ -262,6 +284,12 @@ const summarizeWithAI = async (content) => {
               <i className="fas fa-sign-out-alt me-2"></i>
               Logout
             </button>
+            <button
+  className="btn btn-light btn-sm me-2"
+  onClick={() => navigate("/analytics")}
+>
+  Analytics
+</button>
           </div>
         </nav>
 
@@ -274,7 +302,7 @@ const summarizeWithAI = async (content) => {
                 <h2 className="mb-0">{notes.length}</h2>
               </div>
 
-              <button 
+              <button
                 onClick={() => setShowNewNote(true)}
                 className="btn btn-gradient w-100 mb-3"
               >
@@ -283,11 +311,13 @@ const summarizeWithAI = async (content) => {
               </button>
 
               <h6 className="text-muted mb-3">Recent Notes</h6>
-              
-              {notes.map(note => (
-                <div 
+
+              {notes.map((note) => (
+                <div
                   key={note.id}
-                  className={`note-card ${selectedNote?.id === note.id ? 'active' : ''}`}
+                  className={`note-card ${
+                    selectedNote?.id === note.id ? "active" : ""
+                  }`}
                   onClick={() => setSelectedNote(note)}
                 >
                   <h6 className="mb-2">{note.title}</h6>
@@ -333,12 +363,15 @@ const summarizeWithAI = async (content) => {
                     ></textarea>
                   </div>
                   <div className="d-flex gap-2">
-                    <button onClick={handleAddNote} className="btn btn-gradient">
+                    <button
+                      onClick={handleAddNote}
+                      className="btn btn-gradient"
+                    >
                       <i className="fas fa-save me-2"></i>
                       Save Note
                     </button>
-                    <button 
-                      onClick={() => setShowNewNote(false)} 
+                    <button
+                      onClick={() => setShowNewNote(false)}
                       className="btn btn-outline-secondary"
                     >
                       Cancel
@@ -356,27 +389,41 @@ const summarizeWithAI = async (content) => {
                       </p>
                     </div>
                     <div className="d-flex gap-2">
-  <button
-    onClick={() => {
-      setIsEditing(true);
-      setEditingId(selectedNote.id);
-      setNewNoteTitle(selectedNote.title);
-      setNewNoteContent(selectedNote.content);
-      setShowNewNote(true);
-    }}
-    className="btn btn-outline-primary"
-  >
-    <i className="fas fa-edit"></i>
-  </button>
+                      <button
+                        onClick={() => {
+                          setIsEditing(true);
+                          setEditingId(selectedNote.id);
+                          setNewNoteTitle(selectedNote.title);
+                          setNewNoteContent(selectedNote.content);
+                          setShowNewNote(true);
+                        }}
+                        className="btn btn-outline-primary"
+                      >
+                        <i className="fas fa-edit"></i>
+                      </button>
 
-                      <button 
+                      <button
                         onClick={() => handleSummarize(selectedNote)}
                         className="btn btn-gradient"
+                        disabled={aiLoading}
                       >
-                        <i className="fas fa-magic me-2"></i>
-                        Summarize
+                        {aiLoading ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                            ></span>
+                            Summarizing...
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-magic me-2"></i>
+                            Summarize
+                          </>
+                        )}
                       </button>
-                      <button 
+
+                      <button
                         onClick={() => handleDeleteNote(selectedNote.id)}
                         className="btn btn-outline-danger"
                       >
@@ -387,7 +434,7 @@ const summarizeWithAI = async (content) => {
 
                   <div className="mb-4">
                     <h5 className="mb-3">Content</h5>
-                    <p className="text-muted" style={{lineHeight: '1.8'}}>
+                    <p className="text-muted" style={{ lineHeight: "1.8" }}>
                       {selectedNote.content}
                     </p>
                   </div>
@@ -406,7 +453,7 @@ const summarizeWithAI = async (content) => {
                     <i className="fas fa-file-alt"></i>
                     <h4>No Note Selected</h4>
                     <p>Select a note from the sidebar or create a new one</p>
-                    <button 
+                    <button
                       onClick={() => setShowNewNote(true)}
                       className="btn btn-gradient mt-3"
                     >
