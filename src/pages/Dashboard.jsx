@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { auth } from "../firebase";
+import TopNavbar from "../components/TopNavbar";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -56,11 +59,21 @@ export default function Dashboard() {
       setSelectedNote(notes[0]);
     }
   }, [notes]);
-  const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userEmail");
+  useEffect(() => {
+  if (!localStorage.getItem("isLoggedIn")) {
     navigate("/auth");
-  };
+  }
+}, []);
+
+const handleLogout = async () => {
+  await signOut(auth);
+  localStorage.removeItem("isLoggedIn");
+  localStorage.removeItem("userEmail");
+  localStorage.removeItem("userId");
+
+  navigate("/auth");
+};
+
 
   const handleSummarize = async (note) => {
     if (aiLoading) return; // double click protection
@@ -274,24 +287,8 @@ export default function Dashboard() {
       `}</style>
       <div className="dashboard-container">
         {/* Navbar */}
-        <nav className="navbar navbar-custom navbar-dark">
-          <div className="container-fluid px-4">
-            <span className="navbar-brand mb-0 h1">
-              <i className="fas fa-robot me-2"></i>
-              AI Notes Summarizer
-            </span>
-            <button onClick={handleLogout} className="btn btn-light btn-sm">
-              <i className="fas fa-sign-out-alt me-2"></i>
-              Logout
-            </button>
-            <button
-  className="btn btn-light btn-sm me-2"
-  onClick={() => navigate("/analytics")}
->
-  Analytics
-</button>
-          </div>
-        </nav>
+       <TopNavbar title="📝 Dashboard" />
+
 
         <div className="row g-0">
           {/* Sidebar */}

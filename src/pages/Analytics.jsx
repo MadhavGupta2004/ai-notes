@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { auth } from "../firebase";
+import TopNavbar from "../components/TopNavbar";
+
 
 export default function Analytics() {
   const navigate = useNavigate();
@@ -12,7 +16,6 @@ export default function Analytics() {
     const storedNotes = JSON.parse(localStorage.getItem(notesKey)) || [];
     setNotes(storedNotes);
   }, [notesKey]);
-
   // 📊 CALCULATIONS
   const totalNotes = notes.length;
 
@@ -75,6 +78,14 @@ last365Days.forEach((item, index) => {
     week = Array(7).fill(null);
   }
 });
+const handleLogout = async () => {
+  await signOut(auth);
+  localStorage.removeItem("isLoggedIn");
+  localStorage.removeItem("userEmail");
+  localStorage.removeItem("userId");
+
+  navigate("/auth");
+};
 
 
 
@@ -100,18 +111,7 @@ last365Days.forEach((item, index) => {
       `}</style>
 
       {/* Navbar */}
-      <nav className="navbar gradient px-4">
-        <span className="navbar-brand text-white fw-bold">
-          📊 Analytics
-        </span>
-        <button
-          className="btn btn-light btn-sm"
-          onClick={() => navigate("/dashboard")}
-        >
-          Back
-        </button>
-      </nav>
-
+   <TopNavbar title="📊 Analytics" />
       <div className="container py-4">
         <div className="row g-4">
           <div className="col-md-4">

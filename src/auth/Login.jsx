@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "../firebase";
 
 
 export default function Login() {
@@ -61,6 +63,21 @@ navigate("/dashboard");
       handleSubmit();
     }
   };
+  const handleGoogleLogin = async () => {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
+
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("userId", user.uid);
+    localStorage.setItem("userEmail", user.email);
+
+    navigate("/dashboard");
+  } catch (error) {
+    console.error(error);
+    alert("Google login failed");
+  }
+};
 
   return (
     <>
@@ -256,6 +273,16 @@ navigate("/dashboard");
             <button onClick={handleSubmit} className="btn btn-gradient w-100 mb-3">
               {isLogin ? 'Sign In' : 'Sign Up'}
             </button>
+
+            <button
+  onClick={handleGoogleLogin}
+  className="btn btn-outline-dark w-100 mt-2"
+>
+  <i className="fab fa-google me-2"></i>
+  Continue with Google
+</button>
+
+            
 
             <div className="text-center">
               <button
