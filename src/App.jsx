@@ -1,10 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import AuthPage from "./auth/Login";
+import Login from "./auth/login";
 import Dashboard from "./pages/Dashboard";
-import ProtectedRoute from "./layout/ProtectedRoute";
 import Analytics from "./pages/Analytics";
-
-
+import NotFound from "./pages/Notfound";
+import ProtectedRoute from "./layout/ProtectedRoute";
 
 function App() {
   const isLoggedIn = localStorage.getItem("isLoggedIn");
@@ -12,14 +11,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* AUTH */}
         <Route
-          path="/"
-          element={<Navigate to={isLoggedIn ? "/dashboard" : "/auth"} />}
+          path="/auth"
+          element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login />}
         />
-        <Route path="/analytics" element={<Analytics />} />
 
-        <Route path="/auth" element={<AuthPage />} />
-
+        {/* PROTECTED */}
         <Route
           path="/dashboard"
           element={
@@ -28,6 +26,24 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* DEFAULT */}
+        <Route
+          path="/"
+          element={<Navigate to={isLoggedIn ? "/dashboard" : "/auth"} />}
+        />
+
+        {/* 404 */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );

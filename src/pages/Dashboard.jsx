@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import TopNavbar from "../components/TopNavbar";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -139,48 +144,107 @@ const handleLogout = async () => {
     setNotes(notes.filter((note) => note.id !== id));
     setSelectedNote(null);
   };
+
+  const handlePDFUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert("PDF too large. Max 5MB allowed.");
+    return;
+  }
+
+  try {
+    alert("Reading PDF...");
+
+    const text = await extractTextFromPDF(file);
+    const chunks = chunkText(text);
+
+    let summaries = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      alert(`Summarizing part ${i + 1} / ${chunks.length}`);
+      const summary = await summarizeWithAI(chunks[i]);
+      summaries.push(summary);
+    }
+
+    const finalSummary = summaries.join(" ");
+
+    const pdfNote = {
+      id: Date.now(),
+      title: file.name,
+      content: text.slice(0, 3000), // preview
+      date: new Date().toISOString().split("T")[0],
+      summary: finalSummary,
+    };
+
+    setNotes(prev => [pdfNote, ...prev]);
+    setSelectedNote(pdfNote);
+
+    alert("PDF summarized successfully 🎉");
+
+  } catch (err) {
+    console.error(err);
+    alert(err.message || "PDF processing failed");
+  }
+};
+
   const summarizeWithAI = async (content) => {
-    const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/facebook/bart-large-cnn",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_HF_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ inputs: content }),
-      }
-    );
+  const response = await fetch("/.netlify/functions/summarize", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text: content }),
+  });
 
-    // 🔥 FIRST read as TEXT (safe)
-    const text = await response.text();
+  const data = await response.json();
 
-    // 🔍 Debug (optional but useful)
-    console.log("HF raw response:", text);
+  console.log("🧠 AI RAW RESPONSE:", data);
 
-    if (!text) {
-      throw new Error("Empty response from AI");
-    }
+  if (data.error) {
+    throw new Error(data.error);
+  }
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error("Invalid JSON from AI");
-    }
+  return data.summary;
+};
 
-    // HF error format
-    if (data.error) {
-      throw new Error(data.error);
-    }
 
-    // Expected HF success format
-    if (!Array.isArray(data) || !data[0]?.summary_text) {
-      throw new Error("Unexpected AI response format");
-    }
 
-    return data[0].summary_text;
-  };
+
+  const extractTextFromPDF = async (file) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+  if (pdf.numPages > 30) {
+    throw new Error("PDF too large (max 30 pages)");
+  }
+
+  let fullText = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(item => item.str).join(" ");
+    fullText += pageText + " ";
+  }
+
+  return fullText;
+};
+
+const chunkText = (text, chunkSize = 600) => {
+  const chunks = [];
+  let start = 0;
+
+  while (start < text.length) {
+    chunks.push(text.slice(start, start + chunkSize));
+    start += chunkSize;
+  }
+
+  return chunks;
+};
+
+
 
   return (
     <>
@@ -306,6 +370,29 @@ const handleLogout = async () => {
                 <i className="fas fa-plus me-2"></i>
                 New Note
               </button>
+
+{ // 
+}
+              <button
+  className="btn btn-outline-secondary w-100 mb-3"
+  onClick={() => document.getElementById("pdfInput").click()}
+>
+  📄 Upload PDF
+</button>
+
+<input
+  type="file"
+  id="pdfInput"
+  accept="application/pdf"
+  hidden
+  onChange={handlePDFUpload}
+/>
+
+
+              
+
+
+
 
               <h6 className="text-muted mb-3">Recent Notes</h6>
 
