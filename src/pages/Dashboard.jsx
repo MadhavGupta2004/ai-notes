@@ -28,6 +28,12 @@ export default function Dashboard() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
 
+const [pdfLoading, setPdfLoading] = useState(false);
+const [pdfStage, setPdfStage] = useState(""); 
+const [pdfProgress, setPdfProgress] = useState(0);
+const [pdfTotal, setPdfTotal] = useState(0);
+
+
   useEffect(() => {
     if (!userEmail) return;
 
@@ -42,7 +48,7 @@ export default function Dashboard() {
           title: "Welcome Note",
           content: "This is your personal notes space.",
           date: new Date().toISOString().split("T")[0],
-          summary: "Personal notes initialized",
+          summary: null,
         },
       ];
 
@@ -81,7 +87,7 @@ const handleLogout = async () => {
 
 
   const handleSummarize = async (note) => {
-    if (aiLoading) return; // double click protection
+    if (aiLoading) return;
 
     try {
       setAiLoading(true);
@@ -112,7 +118,7 @@ const handleLogout = async () => {
               ...note,
               title: newNoteTitle,
               content: newNoteContent,
-              summary: "Click summarize to generate AI summary",
+              summary: null,
             }
           : note
       );
@@ -123,18 +129,17 @@ const handleLogout = async () => {
       setEditingId(null);
     } else {
       const newNote = {
-        id: Date.now(), // 🔥 IMPORTANT (unique id)
+        id: Date.now(),
         title: newNoteTitle,
         content: newNoteContent,
         date: new Date().toISOString().split("T")[0],
-        summary: "Click summarize to generate AI summary",
+        summary: null,
       };
 
       setNotes([newNote, ...notes]);
       setSelectedNote(newNote);
     }
 
-    // 🔥 RESET FORM (THIS WAS MISSING)
     setNewNoteTitle("");
     setNewNoteContent("");
     setShowNewNote(false);
@@ -155,41 +160,52 @@ const handleLogout = async () => {
   }
 
   try {
-    alert("Reading PDF...");
+    setPdfLoading(true);
+    setPdfStage("Reading PDF");
+    setPdfProgress(0);
 
-    const text = await extractTextFromPDF(file);
+const { text, totalPages } = await extractTextFromPDF(file, (current, total) => {
+  setPdfTotal(total);
+  setPdfProgress(current);
+});
+
+
     const chunks = chunkText(text);
 
-    let summaries = [];
+let pageSummaries = [];
 
-    for (let i = 0; i < chunks.length; i++) {
-      alert(`Summarizing part ${i + 1} / ${chunks.length}`);
-      const summary = await summarizeWithAI(chunks[i]);
-      summaries.push(summary);
-    }
+for (let i = 0; i < chunks.length; i++) {
+  const summary = await summarizeWithAI(chunks[i]);
 
-    const finalSummary = summaries.join(" ");
+  pageSummaries.push({
+    page: i + 1,
+    text: summary,
+  });
+}
 
-    const pdfNote = {
-      id: Date.now(),
-      title: file.name,
-      content: text.slice(0, 3000), // preview
-      date: new Date().toISOString().split("T")[0],
-      summary: finalSummary,
-    };
+const pdfNote = {
+  id: Date.now(),
+  title: file.name,
+  content: text.slice(0, 2000),
+  date: new Date().toISOString().split("T")[0],
+  summary: pageSummaries,
+};
 
-    setNotes(prev => [pdfNote, ...prev]);
-    setSelectedNote(pdfNote);
+setNotes(prev => [pdfNote, ...prev]);
+setSelectedNote(pdfNote);
 
-    alert("PDF summarized successfully 🎉");
 
   } catch (err) {
     console.error(err);
     alert(err.message || "PDF processing failed");
+  } finally {
+    setPdfLoading(false);
+    setPdfStage("");
   }
 };
 
-  const summarizeWithAI = async (content) => {
+
+const summarizeWithAI = async (content) => {
   const response = await fetch("/.netlify/functions/summarize", {
     method: "POST",
     headers: {
@@ -200,10 +216,8 @@ const handleLogout = async () => {
 
   const data = await response.json();
 
-  console.log("🧠 AI RAW RESPONSE:", data);
-
-  if (data.error) {
-    throw new Error(data.error);
+  if (!data.summary) {
+    throw new Error(data.error || "AI summarization failed");
   }
 
   return data.summary;
@@ -212,7 +226,8 @@ const handleLogout = async () => {
 
 
 
-  const extractTextFromPDF = async (file) => {
+
+  const extractTextFromPDF = async (file, onPageRead) => {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
 
@@ -227,10 +242,16 @@ const handleLogout = async () => {
     const content = await page.getTextContent();
     const pageText = content.items.map(item => item.str).join(" ");
     fullText += pageText + " ";
+
+    onPageRead?.(i, pdf.numPages);
   }
 
-  return fullText;
+  return {
+    text: fullText,
+    totalPages: pdf.numPages,
+  };
 };
+
 
 const chunkText = (text, chunkSize = 600) => {
   const chunks = [];
@@ -261,10 +282,13 @@ const chunkText = (text, chunkSize = 600) => {
         body {
           background: #f5f7fa;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          overflow: hidden;
         }
         
         .dashboard-container {
-          min-height: 100vh;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
         }
         
         .navbar-custom {
@@ -272,11 +296,34 @@ const chunkText = (text, chunkSize = 600) => {
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         
+        .dashboard-content {
+          flex: 1;
+          overflow: hidden;
+          display: flex;
+        }
+        
         .sidebar {
           background: white;
-          height: calc(100vh - 56px);
+          height: 100%;
           box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+          display: flex;
+          flex-direction: column;
+        }
+        
+        .sidebar-fixed-content {
+          flex-shrink: 0;
+        }
+        
+        .notes-scroll-container {
+          flex: 1;
           overflow-y: auto;
+          min-height: 0;
+        }
+        
+        .main-content-wrapper {
+          flex: 1;
+          overflow-y: auto;
+          height: 100%;
         }
         
         .note-card {
@@ -353,200 +400,240 @@ const chunkText = (text, chunkSize = 600) => {
         {/* Navbar */}
        <TopNavbar title="📝 Dashboard" />
 
-
-        <div className="row g-0">
-          {/* Sidebar */}
-          <div className="col-md-4 col-lg-3">
-            <div className="sidebar p-3">
-              <div className="stats-card">
-                <h6 className="mb-1">Total Notes</h6>
-                <h2 className="mb-0">{notes.length}</h2>
-              </div>
-
-              <button
-                onClick={() => setShowNewNote(true)}
-                className="btn btn-gradient w-100 mb-3"
-              >
-                <i className="fas fa-plus me-2"></i>
-                New Note
-              </button>
-
-{ // 
-}
-              <button
-  className="btn btn-outline-secondary w-100 mb-3"
-  onClick={() => document.getElementById("pdfInput").click()}
->
-  📄 Upload PDF
-</button>
-
-<input
-  type="file"
-  id="pdfInput"
-  accept="application/pdf"
-  hidden
-  onChange={handlePDFUpload}
-/>
-
-
-              
-
-
-
-
-              <h6 className="text-muted mb-3">Recent Notes</h6>
-
-              {notes.map((note) => (
-                <div
-                  key={note.id}
-                  className={`note-card ${
-                    selectedNote?.id === note.id ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedNote(note)}
-                >
-                  <h6 className="mb-2">{note.title}</h6>
-                  <p className="text-muted small mb-2">
-                    {note.content.substring(0, 60)}...
-                  </p>
-                  <div className="d-flex justify-content-between align-items-center">
-                    <small className="text-muted">
-                      <i className="far fa-calendar me-1"></i>
-                      {note.date}
-                    </small>
-                    <span className="badge-custom">Note</span>
+        {/* 🔧 NEW: Dashboard content wrapper with fixed height */}
+        <div className="dashboard-content">
+          <div className="row g-0 w-100 h-100">
+            {/* Sidebar */}
+            <div className="col-md-4 col-lg-3 h-100">
+              <div className="sidebar p-3">
+                {/* 🔧 NEW: Fixed content section */}
+                <div className="sidebar-fixed-content">
+                  <div className="stats-card">
+                    <h6 className="mb-1">Total Notes</h6>
+                    <h2 className="mb-0">{notes.length}</h2>
                   </div>
+
+                  <button
+                    onClick={() => setShowNewNote(true)}
+                    className="btn btn-gradient w-100 mb-3"
+                  >
+                    <i className="fas fa-plus me-2"></i>
+                    New Note
+                  </button>
+
+                  <button
+                    className="btn btn-outline-secondary w-100 mb-3"
+                    onClick={() => document.getElementById("pdfInput").click()}
+                  >
+                    📄 Upload PDF
+                  </button>
+
+                  {pdfLoading && (
+                    <div className="alert alert-info mt-3">
+                      <div className="d-flex align-items-center mb-2">
+                        <div className="spinner-border spinner-border-sm me-2"></div>
+                        <strong>{pdfStage}...</strong>
+                      </div>
+
+                      <div className="progress">
+                        <div
+                          className="progress-bar progress-bar-striped progress-bar-animated"
+                          style={{
+                            width: `${(pdfProgress / pdfTotal) * 100}%`,
+                          }}
+                        >
+                          {pdfProgress} / {pdfTotal}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <input
+                    type="file"
+                    id="pdfInput"
+                    accept="application/pdf"
+                    hidden
+                    onChange={handlePDFUpload}
+                  />
+
+                  <h6 className="text-muted mb-3">Recent Notes</h6>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Main Content */}
-          <div className="col-md-8 col-lg-9">
-            <div className="p-4">
-              {showNewNote ? (
-                <div className="content-area">
-                  <h4 className="mb-4">Create New Note</h4>
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">Title</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={newNoteTitle}
-                      onChange={(e) => setNewNoteTitle(e.target.value)}
-                      placeholder="Enter note title"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold">Content</label>
-                    <textarea
-                      className="form-control"
-                      rows="10"
-                      value={newNoteContent}
-                      onChange={(e) => setNewNoteContent(e.target.value)}
-                      placeholder="Write your notes here..."
-                    ></textarea>
-                  </div>
-                  <div className="d-flex gap-2">
-                    <button
-                      onClick={handleAddNote}
-                      className="btn btn-gradient"
+                {/* 🔧 Scrollable notes list */}
+                <div className="notes-scroll-container">
+                  {notes.map((note) => (
+                    <div
+                      key={note.id}
+                      className={`note-card ${
+                        selectedNote?.id === note.id ? "active" : ""
+                      }`}
+                      onClick={() => setSelectedNote(note)}
                     >
-                      <i className="fas fa-save me-2"></i>
-                      Save Note
-                    </button>
-                    <button
-                      onClick={() => setShowNewNote(false)}
-                      className="btn btn-outline-secondary"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : selectedNote ? (
-                <div className="content-area">
-                  <div className="d-flex justify-content-between align-items-start mb-4">
-                    <div>
-                      <h3 className="mb-2">{selectedNote.title}</h3>
-                      <p className="text-muted">
-                        <i className="far fa-calendar me-2"></i>
-                        {selectedNote.date}
+                      <h6 className="mb-2">{note.title}</h6>
+                      <p className="text-muted small mb-2">
+                        {note.content.substring(0, 60)}...
                       </p>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <small className="text-muted">
+                          <i className="far fa-calendar me-1"></i>
+                          {note.date}
+                        </small>
+                        <span className="badge-custom">Note</span>
+                      </div>
                     </div>
-                    <div className="d-flex gap-2">
-                      <button
-                        onClick={() => {
-                          setIsEditing(true);
-                          setEditingId(selectedNote.id);
-                          setNewNoteTitle(selectedNote.title);
-                          setNewNoteContent(selectedNote.content);
-                          setShowNewNote(true);
-                        }}
-                        className="btn btn-outline-primary"
-                      >
-                        <i className="fas fa-edit"></i>
-                      </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
-                      <button
-                        onClick={() => handleSummarize(selectedNote)}
-                        className="btn btn-gradient"
-                        disabled={aiLoading}
-                      >
-                        {aiLoading ? (
-                          <>
-                            <span
-                              className="spinner-border spinner-border-sm me-2"
-                              role="status"
-                            ></span>
-                            Summarizing...
-                          </>
+            {/* Main Content */}
+            <div className="col-md-8 col-lg-9 h-100">
+              {/* 🔧 NEW: Scrollable wrapper for main content */}
+              <div className="main-content-wrapper">
+                <div className="p-4">
+                  {showNewNote ? (
+                    <div className="content-area">
+                      <h4 className="mb-4">Create New Note</h4>
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold">Title</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={newNoteTitle}
+                          onChange={(e) => setNewNoteTitle(e.target.value)}
+                          placeholder="Enter note title"
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <label className="form-label fw-semibold">Content</label>
+                        <textarea
+                          className="form-control"
+                          rows="10"
+                          value={newNoteContent}
+                          onChange={(e) => setNewNoteContent(e.target.value)}
+                          placeholder="Write your notes here..."
+                        ></textarea>
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button
+                          onClick={handleAddNote}
+                          className="btn btn-gradient"
+                        >
+                          <i className="fas fa-save me-2"></i>
+                          Save Note
+                        </button>
+                        <button
+                          onClick={() => setShowNewNote(false)}
+                          className="btn btn-outline-secondary"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : selectedNote ? (
+                    <div className="content-area">
+                      <div className="d-flex justify-content-between align-items-start mb-4">
+                        <div>
+                          <h3 className="mb-2">{selectedNote.title}</h3>
+                          <p className="text-muted">
+                            <i className="far fa-calendar me-2"></i>
+                            {selectedNote.date}
+                          </p>
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button
+                            onClick={() => {
+                              setIsEditing(true);
+                              setEditingId(selectedNote.id);
+                              setNewNoteTitle(selectedNote.title);
+                              setNewNoteContent(selectedNote.content);
+                              setShowNewNote(true);
+                            }}
+                            className="btn btn-outline-primary"
+                          >
+                            <i className="fas fa-edit"></i>
+                          </button>
+
+                          <button
+                            onClick={() => handleSummarize(selectedNote)}
+                            className="btn btn-gradient"
+                            disabled={aiLoading}
+                          >
+                            {aiLoading ? (
+                              <>
+                                <span
+                                  className="spinner-border spinner-border-sm me-2"
+                                  role="status"
+                                ></span>
+                                Summarizing...
+                              </>
+                            ) : (
+                              <>
+                                <i className="fas fa-magic me-2"></i>
+                                Summarize
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteNote(selectedNote.id)}
+                            className="btn btn-outline-danger"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <h5 className="mb-3">Content</h5>
+                        <p style={{ whiteSpace: "pre-wrap" }}>
+                          {selectedNote.content}
+                        </p>
+                      </div>
+
+                      <div className="alert alert-info">
+                        <h6 className="mb-2">
+                          <i className="fas fa-lightbulb me-2"></i>
+                          AI Summary
+                        </h6>
+                        {selectedNote.summary === null ? (
+                          <p className="mb-0 text-muted">
+                            Click summarize to generate AI summary
+                          </p>
+                        ) : Array.isArray(selectedNote.summary) ? (
+                          selectedNote.summary.map((item) => (
+                            <div key={item.page} className="mb-3">
+                              <strong>📄 Page {item.page}</strong>
+                              <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                                {item.text}
+                              </p>
+                            </div>
+                          ))
                         ) : (
-                          <>
-                            <i className="fas fa-magic me-2"></i>
-                            Summarize
-                          </>
+                          <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                            {selectedNote.summary}
+                          </p>
                         )}
-                      </button>
-
-                      <button
-                        onClick={() => handleDeleteNote(selectedNote.id)}
-                        className="btn btn-outline-danger"
-                      >
-                        <i className="fas fa-trash"></i>
-                      </button>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <h5 className="mb-3">Content</h5>
-                    <p className="text-muted" style={{ lineHeight: "1.8" }}>
-                      {selectedNote.content}
-                    </p>
-                  </div>
-
-                  <div className="alert alert-info">
-                    <h6 className="mb-2">
-                      <i className="fas fa-lightbulb me-2"></i>
-                      AI Summary
-                    </h6>
-                    <p className="mb-0">{selectedNote.summary}</p>
-                  </div>
+                  ) : (
+                    <div className="content-area">
+                      <div className="empty-state">
+                        <i className="fas fa-file-alt"></i>
+                        <h4>No Note Selected</h4>
+                        <p>Select a note from the sidebar or create a new one</p>
+                        <button
+                          onClick={() => setShowNewNote(true)}
+                          className="btn btn-gradient mt-3"
+                        >
+                          <i className="fas fa-plus me-2"></i>
+                          Create Your First Note
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="content-area">
-                  <div className="empty-state">
-                    <i className="fas fa-file-alt"></i>
-                    <h4>No Note Selected</h4>
-                    <p>Select a note from the sidebar or create a new one</p>
-                    <button
-                      onClick={() => setShowNewNote(true)}
-                      className="btn btn-gradient mt-3"
-                    >
-                      <i className="fas fa-plus me-2"></i>
-                      Create Your First Note
-                    </button>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

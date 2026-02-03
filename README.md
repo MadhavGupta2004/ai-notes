@@ -1,16 +1,77 @@
-# React + Vite
+# 🧠 AI Notes Summarizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI Notes Summarizer is a full-stack web application that helps users create, manage, analyze, and summarize notes using AI.  
+It also supports **PDF uploads**, **per-user data isolation**, **analytics**, and **Google authentication**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 Features
 
-## React Compiler
+### 🔐 Authentication
+- Google Sign-In using Firebase Auth
+- Protected routes (Auth / Dashboard / Analytics)
+- Per-user data isolation using email-based storage
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 📝 Notes Management
+- Create, edit, delete notes
+- Auto-save notes to local storage (per user)
+- Clean and modern dashboard UI
 
-## Expanding the ESLint configuration
+### 🤖 AI Summarization
+- Text note summarization using Groq LLM
+- Backend proxy via Netlify Functions (no CORS issues)
+- Loading states & error handling
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 📄 PDF Summarization
+- Upload PDFs (up to 30 pages / 5MB)
+- Extract text using `pdfjs`
+- Chunk large documents safely
+- Page-wise AI summaries for better readability
+- Progress bar + loading indicators
+
+### 📊 Analytics
+- Total notes count
+- Word statistics
+- Notes written in last 7 days
+- Longest note
+- **365-day heatmap** (like GitHub / LeetCode)
+
+### 🎨 UI/UX
+- Clean Bootstrap-based design
+- Responsive layout
+- Sidebar scroll isolation (large content won’t break layout)
+- Reusable top navigation bar
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- React (Vite)
+- React Router
+- Bootstrap
+- pdfjs-dist
+
+### Backend
+- Netlify Functions
+- Groq LLM API
+
+### Auth & Services
+- Firebase Authentication (Google Sign-In)
+- LocalStorage (per-user data)
+
+---
+
+## ⚙️ Environment Variables
+
+Create a `.env` file (do **not** commit this):
+
+```env
+VITE_FIREBASE_API_KEY=your_key
+VITE_FIREBASE_AUTH_DOMAIN=your_domain
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+
+GROQ_API_KEY=your_groq_api_key
