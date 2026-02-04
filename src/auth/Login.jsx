@@ -3,81 +3,87 @@ import { useNavigate } from 'react-router-dom';
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 
-
 export default function Login() {
- const navigate = useNavigate();
+  const navigate = useNavigate();
 
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const handleSubmit = () => {
-    setError('');
+  const handleLogin = () => {
+    setError("");
 
-    if (!email || !password || (!isLogin && !name)) {
-      setError('Please fill in all fields');
+    if (!email || !password) {
+      setError("Please enter both email and password.");
       return;
     }
 
-    if (isLogin) {
-      // LOGIN LOGIC - Add localStorage check here:
-      // const storedUser = localStorage.getItem('user');
-      // if (storedUser) { validate credentials }
-      
-     localStorage.setItem("isLoggedIn", "true");
-     localStorage.setItem("userEmail", email);
-     setIsLoggedIn(true);
-     navigate("/dashboard");
+    const users = JSON.parse(localStorage.getItem("users")) || [];
+    const user = users.find(u => u.email === email);
 
-    } else {
-      // SIGNUP LOGIC - Add localStorage save here:
-      // localStorage.setItem('user', JSON.stringify({ name, email, password }));
-      
-      localStorage.setItem(
-  "user",
-  JSON.stringify({ name, email, password })
-);
-localStorage.setItem("isLoggedIn", "true");
-localStorage.setItem("userEmail", email);
-
-setIsLoggedIn(true);
-navigate("/dashboard");
-
+    if (!user) {
+      setError("Account not found. Please sign up.");
+      return;
     }
+
+    if (user.password !== password) {
+      setError("Incorrect password. Please try again.");
+      return;
+    }
+
+    // Success
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("userEmail", user.email);
+    navigate("/dashboard");
   };
 
-  const handleLogout = () => {
-  localStorage.clear();
-  setIsLoggedIn(false);
-  setEmail('');
-  setPassword('');
-  setName('');
-  navigate("/auth");
+  const handleSignup = () => {
+    setError("");
+
+    if (!name || !email || !password) {
+      setError("Please enter all fields.");
+      return;
+    }
+
+    const users = JSON.parse(localStorage.getItem("users")) || [];
+    const userExists = users.find(u => u.email === email);
+    
+    if (userExists) {
+      setError("Account already exists. Please login.");
+      return;
+    }
+
+    users.push({ name, email, password });
+    localStorage.setItem("users", JSON.stringify(users));
+
+    // Auto login after signup
+    localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("userEmail", email);
+    navigate("/dashboard");
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setError("");
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("userEmail", user.email);
+      navigate("/dashboard");
+    } catch (err) {
+      setError("Google sign-in failed. Please try again.");
+      console.error(err);
+    }
   };
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      handleSubmit();
+      isLogin ? handleLogin() : handleSignup();
     }
   };
-  const handleGoogleLogin = async () => {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("userId", user.uid);
-    localStorage.setItem("userEmail", user.email);
-
-    navigate("/dashboard");
-  } catch (error) {
-    console.error(error);
-    alert("Google login failed");
-  }
-};
 
   return (
     <>
@@ -172,16 +178,13 @@ navigate("/dashboard");
           color: white;
         }
         
-        .toggle-btn {
+        .toggle-text {
           color: #667eea;
-          background: none;
-          border: none;
           font-weight: 600;
           cursor: pointer;
-          text-decoration: none;
         }
         
-        .toggle-btn:hover {
+        .toggle-text:hover {
           color: #764ba2;
           text-decoration: underline;
         }
@@ -193,112 +196,104 @@ navigate("/dashboard");
       `}</style>
 
       <div className="login-container">
-        {isLoggedIn ? (
-          <div className="login-card text-center">
+        <div className="login-card">
+          <div className="text-center mb-4">
             <div className="logo-circle">
-              <i className="fas fa-check"></i>
+              <i className="fas fa-robot"></i>
             </div>
-            <h2 className="mb-3">Welcome back!</h2>
-            <p className="text-muted mb-4">You're successfully logged in</p>
-            <button onClick={handleLogout} className="btn btn-gradient w-100">
-              Logout
-            </button>
+            <h1 className="h3 mb-2">AI Notes Summarizer</h1>
+            <p className="text-muted">
+              {isLogin ? 'Welcome back!' : 'Create your account'}
+            </p>
           </div>
-        ) : (
-          <div className="login-card">
-            <div className="text-center mb-4">
-              <div className="logo-circle">
-                <i className="fas fa-robot"></i>
-              </div>
-              <h1 className="h3 mb-2">AI Notes Summarizer</h1>
-              <p className="text-muted">
-                {isLogin ? 'Welcome back!' : 'Create your account'}
-              </p>
-            </div>
 
-            {!isLogin && (
-              <div className="mb-3">
-                <label className="form-label fw-semibold">Full Name</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="John Doe"
-                />
-              </div>
-            )}
-
+          {!isLogin && (
             <div className="mb-3">
-              <label className="form-label fw-semibold">Email</label>
-              <div className="input-group">
-                <span className="input-group-text">
-                  <i className="fas fa-envelope text-muted"></i>
-                </span>
-                <input
-                  type="email"
-                  className="form-control"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="you@example.com"
-                />
-              </div>
+              <label className="form-label fw-semibold">Full Name</label>
+              <input
+                type="text"
+                className="form-control"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="John Doe"
+              />
             </div>
+          )}
 
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Password</label>
-              <div className="input-group">
-                <span className="input-group-text">
-                  <i className="fas fa-lock text-muted"></i>
-                </span>
-                <input
-                  type="password"
-                  className="form-control"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="••••••••"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="alert alert-danger alert-custom mb-3">
-                {error}
-              </div>
-            )}
-
-            <button onClick={handleSubmit} className="btn btn-gradient w-100 mb-3">
-              {isLogin ? 'Sign In' : 'Sign Up'}
-            </button>
-
-            <button
-  onClick={handleGoogleLogin}
-  className="btn btn-outline-dark w-100 mt-2"
->
-  <i className="fab fa-google me-2"></i>
-  Continue with Google
-</button>
-
-            
-
-            <div className="text-center">
-              <button
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError('');
-                }}
-                className="toggle-btn"
-              >
-                {isLogin
-                  ? "Don't have an account? Sign up"
-                  : 'Already have an account? Sign in'}
-              </button>
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Email</label>
+            <div className="input-group">
+              <span className="input-group-text">
+                <i className="fas fa-envelope text-muted"></i>
+              </span>
+              <input
+                type="email"
+                className="form-control"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="you@example.com"
+              />
             </div>
           </div>
-        )}
+
+          <div className="mb-3">
+            <label className="form-label fw-semibold">Password</label>
+            <div className="input-group">
+              <span className="input-group-text">
+                <i className="fas fa-lock text-muted"></i>
+              </span>
+              <input
+                type="password"
+                className="form-control"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="alert alert-danger alert-custom mb-3">
+              {error}
+            </div>
+          )}
+
+          <button
+            className="btn btn-gradient w-100"
+            onClick={isLogin ? handleLogin : handleSignup}
+          >
+            {isLogin ? "Login" : "Sign Up"}
+          </button>
+
+          <button
+            onClick={handleGoogleLogin}
+            className="btn btn-outline-dark w-100 mt-2"
+          >
+            <i className="fab fa-google me-2"></i>
+            Continue with Google
+          </button>
+
+          <p className="text-center mt-3 mb-0">
+            {isLogin ? (
+              <>
+                Don't have an account?{" "}
+                <span onClick={() => setIsLogin(false)} className="toggle-text">
+                  Sign up
+                </span>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <span onClick={() => setIsLogin(true)} className="toggle-text">
+                  Login
+                </span>
+              </>
+            )}
+          </p>
+        </div>
       </div>
     </>
   );

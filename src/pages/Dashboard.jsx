@@ -8,7 +8,6 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-
 export default function Dashboard() {
   const navigate = useNavigate();
 
@@ -28,11 +27,21 @@ export default function Dashboard() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
 
-const [pdfLoading, setPdfLoading] = useState(false);
-const [pdfStage, setPdfStage] = useState(""); 
-const [pdfProgress, setPdfProgress] = useState(0);
-const [pdfTotal, setPdfTotal] = useState(0);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfStage, setPdfStage] = useState("");
+  const [pdfProgress, setPdfProgress] = useState(0);
+  const [pdfTotal, setPdfTotal] = useState(0);
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // 📱 NEW: Mobile view state
+  const [showMobileContent, setShowMobileContent] = useState(false);
+
+  const isLoggedIn = localStorage.getItem("isLoggedIn");
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   useEffect(() => {
     if (!userEmail) return;
@@ -70,21 +79,46 @@ const [pdfTotal, setPdfTotal] = useState(0);
       setSelectedNote(notes[0]);
     }
   }, [notes]);
+
   useEffect(() => {
-  if (!localStorage.getItem("isLoggedIn")) {
-    navigate("/auth");
-  }
-}, []);
+    if (!localStorage.getItem("isLoggedIn")) {
+      navigate("/auth");
+    }
+  }, []);
 
-const handleLogout = async () => {
-  await signOut(auth);
-  localStorage.removeItem("isLoggedIn");
-  localStorage.removeItem("userEmail");
-  localStorage.removeItem("userId");
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.log("Firebase signout failed (safe to ignore)");
+    }
 
-  navigate("/auth");
-};
+    localStorage.clear();
+    navigate("/auth", { replace: true });
+  };
 
+  const getFilteredNotes = () => {
+    if (!searchQuery.trim()) {
+      return notes;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const titleMatches = [];
+    const contentMatches = [];
+
+    notes.forEach((note) => {
+      const titleMatch = note.title.toLowerCase().includes(query);
+      const contentMatch = note.content.toLowerCase().includes(query);
+
+      if (titleMatch) {
+        titleMatches.push(note);
+      } else if (contentMatch) {
+        contentMatches.push(note);
+      }
+    });
+
+    return [...titleMatches, ...contentMatches];
+  };
 
   const handleSummarize = async (note) => {
     if (aiLoading) return;
@@ -143,129 +177,165 @@ const handleLogout = async () => {
     setNewNoteTitle("");
     setNewNoteContent("");
     setShowNewNote(false);
+    setShowMobileContent(false); // Close mobile view
   };
 
   const handleDeleteNote = (id) => {
     setNotes(notes.filter((note) => note.id !== id));
     setSelectedNote(null);
+    setShowMobileContent(false); // Close mobile view
+  };
+
+  // 📱 NEW: Handle note selection on mobile
+  const handleNoteClick = (note) => {
+    setSelectedNote(note);
+    setShowMobileContent(true); // Show content on mobile
   };
 
   const handlePDFUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-  if (file.size > 5 * 1024 * 1024) {
-    alert("PDF too large. Max 5MB allowed.");
-    return;
-  }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("PDF too large. Max 5MB allowed.");
+      return;
+    }
 
-  try {
-    setPdfLoading(true);
-    setPdfStage("Reading PDF");
-    setPdfProgress(0);
+    try {
+      setPdfLoading(true);
+      setPdfStage("Reading PDF");
+      setPdfProgress(0);
 
-const { text, totalPages } = await extractTextFromPDF(file, (current, total) => {
-  setPdfTotal(total);
-  setPdfProgress(current);
-});
+      const { text, totalPages } = await extractTextFromPDF(
+        file,
+        (current, total) => {
+          setPdfTotal(total);
+          setPdfProgress(current);
+        }
+      );
 
+      const chunks = chunkText(text);
+      let pageSummaries = [];
 
-    const chunks = chunkText(text);
+      for (let i = 0; i < chunks.length; i++) {
+        const summary = await summarizeWithAI(chunks[i]);
+        pageSummaries.push({
+          page: i + 1,
+          text: summary,
+        });
+      }
 
-let pageSummaries = [];
+      const pdfNote = {
+        id: Date.now(),
+        title: file.name,
+        content: text.slice(0, 2000),
+        date: new Date().toISOString().split("T")[0],
+        summary: pageSummaries,
+      };
 
-for (let i = 0; i < chunks.length; i++) {
-  const summary = await summarizeWithAI(chunks[i]);
+      setNotes((prev) => [pdfNote, ...prev]);
+      setSelectedNote(pdfNote);
+      setShowMobileContent(true); // Show on mobile
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "PDF processing failed");
+    } finally {
+      setPdfLoading(false);
+      setPdfStage("");
+    }
+  };
 
-  pageSummaries.push({
-    page: i + 1,
-    text: summary,
-  });
-}
+  const summarizeWithAI = async (content) => {
+    const response = await fetch("/.netlify/functions/summarize", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: content }),
+    });
 
-const pdfNote = {
-  id: Date.now(),
-  title: file.name,
-  content: text.slice(0, 2000),
-  date: new Date().toISOString().split("T")[0],
-  summary: pageSummaries,
-};
+    const data = await response.json();
 
-setNotes(prev => [pdfNote, ...prev]);
-setSelectedNote(pdfNote);
+    if (!data.summary) {
+      throw new Error(data.error || "AI summarization failed");
+    }
 
-
-  } catch (err) {
-    console.error(err);
-    alert(err.message || "PDF processing failed");
-  } finally {
-    setPdfLoading(false);
-    setPdfStage("");
-  }
-};
-
-
-const summarizeWithAI = async (content) => {
-  const response = await fetch("/.netlify/functions/summarize", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ text: content }),
-  });
-
-  const data = await response.json();
-
-  if (!data.summary) {
-    throw new Error(data.error || "AI summarization failed");
-  }
-
-  return data.summary;
-};
-
-
-
-
+    return data.summary;
+  };
 
   const extractTextFromPDF = async (file, onPageRead) => {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
 
-  if (pdf.numPages > 30) {
-    throw new Error("PDF too large (max 30 pages)");
-  }
+    if (pdf.numPages > 30) {
+      throw new Error("PDF too large (max 30 pages)");
+    }
 
-  let fullText = "";
+    let fullText = "";
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str).join(" ");
-    fullText += pageText + " ";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((item) => item.str).join(" ");
+      fullText += pageText + " ";
 
-    onPageRead?.(i, pdf.numPages);
-  }
+      onPageRead?.(i, pdf.numPages);
+    }
 
-  return {
-    text: fullText,
-    totalPages: pdf.numPages,
+    return {
+      text: fullText,
+      totalPages: pdf.numPages,
+    };
   };
-};
 
+  const chunkText = (text, chunkSize = 600) => {
+    const chunks = [];
+    let start = 0;
 
-const chunkText = (text, chunkSize = 600) => {
-  const chunks = [];
-  let start = 0;
+    while (start < text.length) {
+      chunks.push(text.slice(start, start + chunkSize));
+      start += chunkSize;
+    }
 
-  while (start < text.length) {
-    chunks.push(text.slice(start, start + chunkSize));
-    start += chunkSize;
-  }
+    return chunks;
+  };
 
-  return chunks;
-};
+  const generateQuizWithAI = async (content) => {
+    const response = await fetch("/.netlify/functions/generateQuiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: content }),
+    });
 
+    const quiz = await response.json();
 
+    if (!Array.isArray(quiz)) {
+      throw new Error("Quiz generation failed");
+    }
+
+    return quiz;
+  };
+
+  const handleGenerateQuiz = async (note) => {
+    try {
+      setAiLoading(true);
+
+      const quiz = await generateQuizWithAI(note.content);
+
+      const updatedNotes = notes.map((n) =>
+        n.id === note.id ? { ...n, quiz } : n
+      );
+
+      setNotes(updatedNotes);
+      setSelectedNote(updatedNotes.find((n) => n.id === note.id));
+    } catch (err) {
+      alert("Quiz generation failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const filteredNotes = getFilteredNotes();
 
   return (
     <>
@@ -289,11 +359,6 @@ const chunkText = (text, chunkSize = 600) => {
           height: 100vh;
           display: flex;
           flex-direction: column;
-        }
-        
-        .navbar-custom {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         
         .dashboard-content {
@@ -395,18 +460,151 @@ const chunkText = (text, chunkSize = 600) => {
           color: #ddd;
           margin-bottom: 20px;
         }
-      `}</style>
-      <div className="dashboard-container">
-        {/* Navbar */}
-       <TopNavbar title="📝 Dashboard" />
 
-        {/* 🔧 NEW: Dashboard content wrapper with fixed height */}
+        .search-container {
+          position: relative;
+          margin-bottom: 15px;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 12px 40px 12px 15px;
+          border: 2px solid #e0e0e0;
+          border-radius: 10px;
+          font-size: 0.9rem;
+          transition: all 0.3s;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-icon {
+          position: absolute;
+          right: 15px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #888;
+          pointer-events: none;
+        }
+
+        .clear-search {
+          position: absolute;
+          right: 15px;
+          top: 50%;
+          transform: translateY(-50%);
+          background: none;
+          border: none;
+          color: #888;
+          cursor: pointer;
+          padding: 5px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .clear-search:hover {
+          color: #667eea;
+        }
+
+        .search-results-info {
+          font-size: 0.85rem;
+          color: #888;
+          margin-bottom: 10px;
+          padding: 0 5px;
+        }
+
+        .no-results {
+          text-align: center;
+          padding: 40px 20px;
+          color: #999;
+        }
+
+        .no-results i {
+          font-size: 48px;
+          color: #ddd;
+          margin-bottom: 15px;
+        }
+
+        /* 📱 NEW: Mobile overlay styles */
+        .mobile-content-overlay {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: white;
+          z-index: 1050;
+          overflow-y: auto;
+        }
+
+        .mobile-content-overlay.show {
+          display: block;
+        }
+
+        .mobile-back-button {
+          position: sticky;
+          top: 0;
+          background: white;
+          padding: 1rem;
+          border-bottom: 1px solid #e0e0e0;
+          z-index: 10;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .mobile-back-button button {
+          background: transparent;
+          border: none;
+          font-size: 1.5rem;
+          color: #667eea;
+          cursor: pointer;
+        }
+
+        .mobile-content-wrapper {
+          padding: 1rem;
+        }
+
+        /* 📱 Responsive breakpoints */
+        @media (max-width: 768px) {
+          .col-md-8.col-lg-9 {
+            display: none !important;
+          }
+
+          .content-area {
+            padding: 20px;
+            min-height: auto;
+          }
+
+          .btn-group-mobile {
+            flex-wrap: wrap;
+          }
+
+          .btn-group-mobile button {
+            flex: 1 1 45%;
+            margin-bottom: 0.5rem;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .mobile-content-overlay {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      <div className="dashboard-container">
+        <TopNavbar title="📝 Dashboard" />
+
         <div className="dashboard-content">
           <div className="row g-0 w-100 h-100">
             {/* Sidebar */}
             <div className="col-md-4 col-lg-3 h-100">
               <div className="sidebar p-3">
-                {/* 🔧 NEW: Fixed content section */}
                 <div className="sidebar-fixed-content">
                   <div className="stats-card">
                     <h6 className="mb-1">Total Notes</h6>
@@ -414,7 +612,10 @@ const chunkText = (text, chunkSize = 600) => {
                   </div>
 
                   <button
-                    onClick={() => setShowNewNote(true)}
+                    onClick={() => {
+                      setShowNewNote(true);
+                      setShowMobileContent(true);
+                    }}
                     className="btn btn-gradient w-100 mb-3"
                   >
                     <i className="fas fa-plus me-2"></i>
@@ -456,39 +657,77 @@ const chunkText = (text, chunkSize = 600) => {
                     onChange={handlePDFUpload}
                   />
 
-                  <h6 className="text-muted mb-3">Recent Notes</h6>
+                  <div className="search-container">
+                    <input
+                      type="text"
+                      className="search-input"
+                      placeholder="Search notes..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery ? (
+                      <button
+                        className="clear-search"
+                        onClick={() => setSearchQuery("")}
+                        title="Clear search"
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
+                    ) : (
+                      <i className="fas fa-search search-icon"></i>
+                    )}
+                  </div>
+
+                  {searchQuery && (
+                    <div className="search-results-info">
+                      {filteredNotes.length} result
+                      {filteredNotes.length !== 1 ? "s" : ""} found
+                    </div>
+                  )}
+
+                  <h6 className="text-muted mb-3">
+                    {searchQuery ? "Search Results" : "Recent Notes"}
+                  </h6>
                 </div>
 
-                {/* 🔧 Scrollable notes list */}
                 <div className="notes-scroll-container">
-                  {notes.map((note) => (
-                    <div
-                      key={note.id}
-                      className={`note-card ${
-                        selectedNote?.id === note.id ? "active" : ""
-                      }`}
-                      onClick={() => setSelectedNote(note)}
-                    >
-                      <h6 className="mb-2">{note.title}</h6>
-                      <p className="text-muted small mb-2">
-                        {note.content.substring(0, 60)}...
-                      </p>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <small className="text-muted">
-                          <i className="far fa-calendar me-1"></i>
-                          {note.date}
-                        </small>
-                        <span className="badge-custom">Note</span>
+                  {filteredNotes.length > 0 ? (
+                    filteredNotes.map((note) => (
+                      <div
+                        key={note.id}
+                        className={`note-card ${
+                          selectedNote?.id === note.id ? "active" : ""
+                        }`}
+                        onClick={() => handleNoteClick(note)}
+                      >
+                        <h6 className="mb-2">{note.title}</h6>
+                        <p className="text-muted small mb-2">
+                          {note.content.substring(0, 60)}...
+                        </p>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <small className="text-muted">
+                            <i className="far fa-calendar me-1"></i>
+                            {note.date}
+                          </small>
+                          <span className="badge-custom">Note</span>
+                        </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="no-results">
+                      <i className="fas fa-search"></i>
+                      <p className="mb-0">No notes found</p>
+                      <small className="text-muted">
+                        Try a different search term
+                      </small>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Main Content */}
+            {/* Main Content (Desktop) */}
             <div className="col-md-8 col-lg-9 h-100">
-              {/* 🔧 NEW: Scrollable wrapper for main content */}
               <div className="main-content-wrapper">
                 <div className="p-4">
                   {showNewNote ? (
@@ -505,7 +744,9 @@ const chunkText = (text, chunkSize = 600) => {
                         />
                       </div>
                       <div className="mb-4">
-                        <label className="form-label fw-semibold">Content</label>
+                        <label className="form-label fw-semibold">
+                          Content
+                        </label>
                         <textarea
                           className="form-control"
                           rows="10"
@@ -576,6 +817,14 @@ const chunkText = (text, chunkSize = 600) => {
                           </button>
 
                           <button
+                            onClick={() => handleGenerateQuiz(selectedNote)}
+                            className="btn btn-outline-success"
+                            disabled={aiLoading}
+                          >
+                            🧠 Generate Quiz
+                          </button>
+
+                          <button
                             onClick={() => handleDeleteNote(selectedNote.id)}
                             className="btn btn-outline-danger"
                           >
@@ -604,24 +853,59 @@ const chunkText = (text, chunkSize = 600) => {
                           selectedNote.summary.map((item) => (
                             <div key={item.page} className="mb-3">
                               <strong>📄 Page {item.page}</strong>
-                              <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                              <p
+                                className="mb-0"
+                                style={{ whiteSpace: "pre-wrap" }}
+                              >
                                 {item.text}
                               </p>
                             </div>
                           ))
                         ) : (
-                          <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                          <p
+                            className="mb-0"
+                            style={{ whiteSpace: "pre-wrap" }}
+                          >
                             {selectedNote.summary}
                           </p>
                         )}
                       </div>
+
+                      {Array.isArray(selectedNote.quiz) && (
+                        <div className="alert alert-warning mt-4">
+                          <h6 className="mb-3">
+                            <i className="fas fa-question-circle me-2"></i>
+                            AI Quiz
+                          </h6>
+
+                          {selectedNote.quiz.map((q, idx) => (
+                            <div key={idx} className="mb-4">
+                              <strong>
+                                Q{idx + 1}. {q.question}
+                              </strong>
+
+                              <ul className="mt-2">
+                                {q.options.map((opt, i) => (
+                                  <li key={i}>{opt}</li>
+                                ))}
+                              </ul>
+
+                              <small className="text-success">
+                                ✔ Answer: {q.answer}
+                              </small>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="content-area">
                       <div className="empty-state">
                         <i className="fas fa-file-alt"></i>
                         <h4>No Note Selected</h4>
-                        <p>Select a note from the sidebar or create a new one</p>
+                        <p>
+                          Select a note from the sidebar or create a new one
+                        </p>
                         <button
                           onClick={() => setShowNewNote(true)}
                           className="btn btn-gradient mt-3"
@@ -635,6 +919,177 @@ const chunkText = (text, chunkSize = 600) => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* 📱 NEW: Mobile Content Overlay */}
+        <div className={`mobile-content-overlay ${showMobileContent ? 'show' : ''}`}>
+          <div className="mobile-back-button">
+            <button onClick={() => setShowMobileContent(false)}>
+              <i className="fas fa-arrow-left"></i>
+            </button>
+            <h5 className="mb-0">
+              {showNewNote ? "Create Note" : selectedNote?.title}
+            </h5>
+          </div>
+
+          <div className="mobile-content-wrapper">
+            {showNewNote ? (
+              <div className="content-area">
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Title</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newNoteTitle}
+                    onChange={(e) => setNewNoteTitle(e.target.value)}
+                    placeholder="Enter note title"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="form-label fw-semibold">Content</label>
+                  <textarea
+                    className="form-control"
+                    rows="10"
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    placeholder="Write your notes here..."
+                  ></textarea>
+                </div>
+                <div className="d-flex gap-2">
+                  <button onClick={handleAddNote} className="btn btn-gradient">
+                    <i className="fas fa-save me-2"></i>
+                    Save Note
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNewNote(false);
+                      setShowMobileContent(false);
+                    }}
+                    className="btn btn-outline-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : selectedNote ? (
+              <div className="content-area">
+                <div className="mb-3">
+                  <p className="text-muted">
+                    <i className="far fa-calendar me-2"></i>
+                    {selectedNote.date}
+                  </p>
+                </div>
+
+                <div className="d-flex gap-2 mb-4 btn-group-mobile flex-wrap">
+                  <button
+                    onClick={() => {
+                      setIsEditing(true);
+                      setEditingId(selectedNote.id);
+                      setNewNoteTitle(selectedNote.title);
+                      setNewNoteContent(selectedNote.content);
+                      setShowNewNote(true);
+                    }}
+                    className="btn btn-outline-primary btn-sm"
+                  >
+                    <i className="fas fa-edit me-1"></i>
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => handleSummarize(selectedNote)}
+                    className="btn btn-gradient btn-sm"
+                    disabled={aiLoading}
+                  >
+                    {aiLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-1"></span>
+                        Summarizing...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-magic me-1"></i>
+                        Summarize
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => handleGenerateQuiz(selectedNote)}
+                    className="btn btn-outline-success btn-sm"
+                    disabled={aiLoading}
+                  >
+                    🧠 Quiz
+                  </button>
+
+                  <button
+                    onClick={() => handleDeleteNote(selectedNote.id)}
+                    className="btn btn-outline-danger btn-sm"
+                  >
+                    <i className="fas fa-trash"></i>
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <h5 className="mb-3">Content</h5>
+                  <p style={{ whiteSpace: "pre-wrap" }}>
+                    {selectedNote.content}
+                  </p>
+                </div>
+
+                <div className="alert alert-info">
+                  <h6 className="mb-2">
+                    <i className="fas fa-lightbulb me-2"></i>
+                    AI Summary
+                  </h6>
+                  {selectedNote.summary === null ? (
+                    <p className="mb-0 text-muted">
+                      Click summarize to generate AI summary
+                    </p>
+                  ) : Array.isArray(selectedNote.summary) ? (
+                    selectedNote.summary.map((item) => (
+                      <div key={item.page} className="mb-3">
+                        <strong>📄 Page {item.page}</strong>
+                        <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                          {item.text}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                      {selectedNote.summary}
+                    </p>
+                  )}
+                </div>
+
+                {Array.isArray(selectedNote.quiz) && (
+                  <div className="alert alert-warning mt-4">
+                    <h6 className="mb-3">
+                      <i className="fas fa-question-circle me-2"></i>
+                      AI Quiz
+                    </h6>
+
+                    {selectedNote.quiz.map((q, idx) => (
+                      <div key={idx} className="mb-4">
+                        <strong>
+                          Q{idx + 1}. {q.question}
+                        </strong>
+
+                        <ul className="mt-2">
+                          {q.options.map((opt, i) => (
+                            <li key={i}>{opt}</li>
+                          ))}
+                        </ul>
+
+                        <small className="text-success">
+                          ✔ Answer: {q.answer}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

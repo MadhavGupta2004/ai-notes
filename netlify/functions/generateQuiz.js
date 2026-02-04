@@ -7,7 +7,7 @@ export async function handler(event) {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -16,36 +16,48 @@ export async function handler(event) {
             {
               role: "system",
               content: `
-Summarize the given text into 4–6 concise bullet points.
-• Use simple language
-• Focus on key ideas only
-• Avoid repeating sentences
-• Do NOT add headings
-              `,
+You are an exam generator.
+
+Generate EXACTLY 5 multiple choice questions.
+Return ONLY valid JSON. No markdown. No text.
+
+Format:
+[
+  {
+    "question": "",
+    "options": ["A", "B", "C", "D"],
+    "answer": "A"
+  }
+]
+`
             },
             {
               role: "user",
-              content: text,
-            },
+              content: text
+            }
           ],
-          temperature: 0.3,
-          max_tokens: 250,
+          temperature: 0.4,
+          max_tokens: 700,
         }),
       }
     );
 
     const data = await response.json();
 
-    if (!data.choices || !data.choices[0]) {
+    if (!data.choices) {
       throw new Error("Invalid AI response");
     }
 
+    const quizJson = JSON.parse(data.choices[0].message.content);
+
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        summary: data.choices[0].message.content,
-      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(quizJson),
     };
+
   } catch (err) {
     return {
       statusCode: 500,
