@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./auth/Login";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
+import Favorites from "./pages/Favorites";
 import NotFound from "./pages/Notfound";
 import ProtectedRoute from "./layout/ProtectedRoute";
 
@@ -32,6 +33,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Analytics />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/favorites"
+          element={
+            <ProtectedRoute>
+              <Favorites />
             </ProtectedRoute>
           }
         />

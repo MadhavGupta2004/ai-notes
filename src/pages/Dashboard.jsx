@@ -186,6 +186,22 @@ export default function Dashboard() {
     setShowMobileContent(false); // Close mobile view
   };
 
+  // ❤️ NEW: Toggle favorite status
+  const handleToggleFavorite = (id) => {
+    const updatedNotes = notes.map((note) =>
+      note.id === id
+        ? { ...note, isFavorite: !note.isFavorite }
+        : note
+    );
+
+    setNotes(updatedNotes);
+    
+    const updatedSelectedNote = updatedNotes.find((n) => n.id === id);
+    if (selectedNote?.id === id) {
+      setSelectedNote(updatedSelectedNote);
+    }
+  };
+
   // 📱 NEW: Handle note selection on mobile
   const handleNoteClick = (note) => {
     setSelectedNote(note);
@@ -698,10 +714,31 @@ export default function Dashboard() {
                         className={`note-card ${
                           selectedNote?.id === note.id ? "active" : ""
                         }`}
-                        onClick={() => handleNoteClick(note)}
                       >
-                        <h6 className="mb-2">{note.title}</h6>
-                        <p className="text-muted small mb-2">
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <h6 
+                            className="mb-0" 
+                            style={{ cursor: "pointer", flex: 1 }}
+                            onClick={() => handleNoteClick(note)}
+                          >
+                            {note.title}
+                          </h6>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(note.id);
+                            }}
+                            className="btn btn-sm p-0 ms-2"
+                            title={note.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <i className={`${note.isFavorite ? "fas" : "far"} fa-heart`} style={{ color: note.isFavorite ? "#e74c3c" : "#ccc" }}></i>
+                          </button>
+                        </div>
+                        <p 
+                          className="text-muted small mb-2"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handleNoteClick(note)}
+                        >
                           {note.content.substring(0, 60)}...
                         </p>
                         <div className="d-flex justify-content-between align-items-center">
@@ -782,6 +819,14 @@ export default function Dashboard() {
                           </p>
                         </div>
                         <div className="d-flex gap-2">
+                          <button
+                            onClick={() => handleToggleFavorite(selectedNote.id)}
+                            className="btn"
+                            title={selectedNote.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <i className={`${selectedNote.isFavorite ? "fas" : "far"} fa-heart`} style={{ color: selectedNote.isFavorite ? "#e74c3c" : "#999", fontSize: "1.2rem" }}></i>
+                          </button>
+
                           <button
                             onClick={() => {
                               setIsEditing(true);
@@ -982,6 +1027,15 @@ export default function Dashboard() {
                 </div>
 
                 <div className="d-flex gap-2 mb-4 btn-group-mobile flex-wrap">
+                  <button
+                    onClick={() => handleToggleFavorite(selectedNote.id)}
+                    className="btn btn-outline-danger btn-sm"
+                    title={selectedNote.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <i className={`${selectedNote.isFavorite ? "fas" : "far"} fa-heart me-1`}></i>
+                    {selectedNote.isFavorite ? "Favorited" : "Add to Favorites"}
+                  </button>
+
                   <button
                     onClick={() => {
                       setIsEditing(true);

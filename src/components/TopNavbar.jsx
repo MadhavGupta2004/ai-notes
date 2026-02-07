@@ -11,6 +11,7 @@ export default function TopNavbar({ title }) {
 
   const isDashboard = location.pathname === "/dashboard";
   const isAnalytics = location.pathname === "/analytics";
+  const isFavorites = location.pathname === "/favorites";
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -177,6 +178,15 @@ export default function TopNavbar({ title }) {
 
             <button
               className={`btn btn-sm ${
+                isFavorites ? "btn-danger" : "btn-outline-danger"
+              }`}
+              onClick={() => navigate("/favorites")}
+            >
+              ❤️ Favorites
+            </button>
+
+            <button
+              className={`btn btn-sm ${
                 isAnalytics ? "btn-primary" : "btn-outline-primary"
               }`}
               onClick={() => navigate("/analytics")}
@@ -241,6 +251,19 @@ export default function TopNavbar({ title }) {
             >
               <i className="fas fa-home me-2"></i>
               Dashboard
+            </button>
+
+            <button
+              className={`btn ${
+                isFavorites ? "btn-danger" : "btn-outline-danger"
+              }`}
+              onClick={() => {
+                navigate("/favorites");
+                setMenuOpen(false);
+              }}
+            >
+              <i className="fas fa-heart me-2"></i>
+              Favorites
             </button>
 
             <button
