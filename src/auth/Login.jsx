@@ -11,6 +11,10 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [tempPassword, setTempPassword] = useState('');
 
   const handleLogin = () => {
     setError("");
@@ -74,8 +78,17 @@ export default function Login() {
       localStorage.setItem("userEmail", user.email);
       navigate("/dashboard");
     } catch (err) {
-      setError("Google sign-in failed. Please try again.");
-      console.error(err);
+      // Handle specific Firebase auth errors
+      if (err.code === "auth/popup-blocked") {
+        setError("Pop-up was blocked. Please allow pop-ups and try again.");
+      } else if (err.code === "auth/cancelled-popup-request") {
+        setError("Sign-in cancelled. Please try again.");
+      } else if (err.code === "auth/popup-closed-by-user") {
+        setError("Pop-up closed. Please try again.");
+      } else {
+        setError("Google sign-in failed. Please try again or check the console.");
+      }
+      console.error("Google Login Error:", err.code, err.message);
     }
   };
 
@@ -83,6 +96,50 @@ export default function Login() {
     if (e.key === 'Enter') {
       isLogin ? handleLogin() : handleSignup();
     }
+  };
+
+  const handleForgotPassword = () => {
+    setError("");
+    setResetSuccess(false);
+
+    if (!forgotEmail) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    const users = JSON.parse(localStorage.getItem("users")) || [];
+    let user = users.find(u => u.email === forgotEmail);
+
+    if (!user) {
+      // If no local account exists, create one with a temporary password
+      // This allows Google auth users to also use email/password login
+      const generatedTempPassword = Math.random().toString(36).slice(-8).toUpperCase();
+      
+      const newUser = {
+        name: forgotEmail.split('@')[0],
+        email: forgotEmail,
+        password: generatedTempPassword
+      };
+
+      users.push(newUser);
+      localStorage.setItem("users", JSON.stringify(users));
+
+      setResetSuccess(true);
+      setTempPassword(generatedTempPassword);
+      // Don't clear forgotEmail here, we need it for display
+      return;
+    }
+
+    // If account exists, update password
+    const generatedTempPassword = Math.random().toString(36).slice(-8).toUpperCase();
+    user.password = generatedTempPassword;
+    const updatedUsers = users.map(u => u.email === forgotEmail ? user : u);
+    localStorage.setItem("users", JSON.stringify(updatedUsers));
+
+    // Show success with temp password
+    setResetSuccess(true);
+    setTempPassword(generatedTempPassword);
+    // Don't clear forgotEmail here, we need it for display
   };
 
   return (
@@ -197,102 +254,251 @@ export default function Login() {
 
       <div className="login-container">
         <div className="login-card">
-          <div className="text-center mb-4">
-            <div className="logo-circle">
-              <i className="fas fa-robot"></i>
-            </div>
-            <h1 className="h3 mb-2">AI Notes Summarizer</h1>
-            <p className="text-muted">
-              {isLogin ? 'Welcome back!' : 'Create your account'}
-            </p>
-          </div>
+          {!showForgotPassword ? (
+            <>
+              <div className="text-center mb-4">
+                <div className="logo-circle">
+                  <i className="fas fa-robot"></i>
+                </div>
+                <h1 className="h3 mb-2">AI Notes Summarizer</h1>
+                <p className="text-muted">
+                  {isLogin ? 'Welcome back!' : 'Create your account'}
+                </p>
+              </div>
 
-          {!isLogin && (
-            <div className="mb-3">
-              <label className="form-label fw-semibold">Full Name</label>
-              <input
-                type="text"
-                className="form-control"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="John Doe"
-              />
-            </div>
+              {!isLogin && (
+                <div className="mb-3">
+                  <label className="form-label fw-semibold">Full Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="John Doe"
+                  />
+                </div>
+              )}
+
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Email</label>
+                <div className="input-group">
+                  <span className="input-group-text">
+                    <i className="fas fa-envelope text-muted"></i>
+                  </span>
+                  <input
+                    type="email"
+                    className="form-control"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-semibold">Password</label>
+                <div className="input-group">
+                  <span className="input-group-text">
+                    <i className="fas fa-lock text-muted"></i>
+                  </span>
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="••••••••"
+                  />
+                </div>
+                {isLogin && (
+                  <small 
+                    className="toggle-text" 
+                    style={{cursor: 'pointer', display: 'block', marginTop: '8px'}}
+                    onClick={() => setShowForgotPassword(true)}
+                  >
+                    <i className="fas fa-redo me-1"></i>
+                    Forgot Password?
+                  </small>
+                )}
+              </div>
+
+              {error && (
+                <div className="alert alert-danger alert-custom mb-3">
+                  {error}
+                </div>
+              )}
+
+              <button
+                className="btn btn-gradient w-100"
+                onClick={isLogin ? handleLogin : handleSignup}
+              >
+                {isLogin ? "Login" : "Sign Up"}
+              </button>
+
+              <button
+                onClick={handleGoogleLogin}
+                className="btn btn-outline-dark w-100 mt-2"
+              >
+                <i className="fab fa-google me-2"></i>
+                Continue with Google
+              </button>
+
+              <p className="text-center mt-3 mb-0">
+                {isLogin ? (
+                  <>
+                    Don't have an account?{" "}
+                    <span onClick={() => setIsLogin(false)} className="toggle-text">
+                      Sign up
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <span onClick={() => setIsLogin(true)} className="toggle-text">
+                      Login
+                    </span>
+                  </>
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="text-center mb-4">
+                <div className="logo-circle">
+                  <i className="fas fa-key"></i>
+                </div>
+                <h1 className="h3 mb-2">Reset Password</h1>
+                <p className="text-muted">
+                  {!resetSuccess 
+                    ? "Enter your email to receive a temporary password"
+                    : "Your temporary password is ready!"
+                  }
+                </p>
+              </div>
+
+              {!resetSuccess ? (
+                <>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold">Email Address</label>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <i className="fas fa-envelope text-muted"></i>
+                      </span>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleForgotPassword();
+                          }
+                        }}
+                        placeholder="you@example.com"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="alert alert-danger alert-custom mb-3">
+                      <i className="fas fa-exclamation-circle me-2"></i>
+                      {error}
+                    </div>
+                  )}
+
+                  <button
+                    className="btn btn-gradient w-100"
+                    onClick={handleForgotPassword}
+                  >
+                    <i className="fas fa-paper-plane me-2"></i>
+                    Reset Password
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="alert alert-success alert-custom mb-3">
+                    <i className="fas fa-check-circle me-2"></i>
+                    <strong>Password ready!</strong>
+                  </div>
+
+                  <div className="alert alert-info alert-custom mb-3">
+                    <small>
+                      <strong>ℹ️ Note:</strong> If you use Google Sign-In, your notes will still sync because we use your email address to maintain your data.
+                    </small>
+                  </div>
+
+                  <div className="card border-2 border-primary mb-3" style={{borderColor: '#667eea !important'}}>
+                    <div className="card-body p-3">
+                      <p className="text-muted small mb-2">Your temporary password:</p>
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className="form-control fw-bold"
+                          value={tempPassword}
+                          readOnly
+                          style={{fontSize: '1.1rem', letterSpacing: '2px'}}
+                        />
+                        <button
+                          className="btn btn-outline-primary"
+                          onClick={() => {
+                            navigator.clipboard.writeText(tempPassword);
+                            alert("✓ Copied to clipboard!");
+                          }}
+                        >
+                          <i className="fas fa-copy"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="alert alert-info alert-custom mb-3">
+                    <strong>📋 Next steps:</strong>
+                    <ul className="mb-0 mt-2">
+                      <li>Copy the password above (click the copy button)</li>
+                      <li>Click "Back to Login" below</li>
+                      <li>Enter your email: <code>{forgotEmail || userEmail || "your@email.com"}</code></li>
+                      <li>Paste the temporary password</li>
+                      <li>After login, go to Settings to change your password</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    className="btn btn-outline-primary w-100"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setError("");
+                      setResetSuccess(false);
+                      setForgotEmail("");
+                      setTempPassword("");
+                    }}
+                  >
+                    <i className="fas fa-arrow-left me-2"></i>
+                    Back to Login
+                  </button>
+                </>
+              )}
+
+              {!resetSuccess && (
+                <p className="text-center mt-3 mb-0">
+                  <span 
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setError("");
+                      setResetSuccess(false);
+                      setForgotEmail("");
+                    }} 
+                    className="toggle-text"
+                  >
+                    <i className="fas fa-arrow-left me-1"></i>
+                    Back to Login
+                  </span>
+                </p>
+              )}
+            </>
           )}
-
-          <div className="mb-3">
-            <label className="form-label fw-semibold">Email</label>
-            <div className="input-group">
-              <span className="input-group-text">
-                <i className="fas fa-envelope text-muted"></i>
-              </span>
-              <input
-                type="email"
-                className="form-control"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="you@example.com"
-              />
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <label className="form-label fw-semibold">Password</label>
-            <div className="input-group">
-              <span className="input-group-text">
-                <i className="fas fa-lock text-muted"></i>
-              </span>
-              <input
-                type="password"
-                className="form-control"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="alert alert-danger alert-custom mb-3">
-              {error}
-            </div>
-          )}
-
-          <button
-            className="btn btn-gradient w-100"
-            onClick={isLogin ? handleLogin : handleSignup}
-          >
-            {isLogin ? "Login" : "Sign Up"}
-          </button>
-
-          <button
-            onClick={handleGoogleLogin}
-            className="btn btn-outline-dark w-100 mt-2"
-          >
-            <i className="fab fa-google me-2"></i>
-            Continue with Google
-          </button>
-
-          <p className="text-center mt-3 mb-0">
-            {isLogin ? (
-              <>
-                Don't have an account?{" "}
-                <span onClick={() => setIsLogin(false)} className="toggle-text">
-                  Sign up
-                </span>
-              </>
-            ) : (
-              <>
-                Already have an account?{" "}
-                <span onClick={() => setIsLogin(true)} className="toggle-text">
-                  Login
-                </span>
-              </>
-            )}
-          </p>
         </div>
       </div>
     </>

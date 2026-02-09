@@ -5,6 +5,15 @@ import { auth } from "../firebase";
 import TopNavbar from "../components/TopNavbar";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker?url";
+import {
+  subscribeToUserNotes,
+  createNote,
+  updateNote,
+  deleteNote,
+  toggleFavorite,
+  updateSummary,
+  updateQuiz,
+} from "../firebaseDB";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -12,7 +21,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const userEmail = localStorage.getItem("userEmail");
-  const notesKey = `notes_${userEmail}`;
 
   const [notes, setNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);
@@ -46,39 +54,25 @@ export default function Dashboard() {
   useEffect(() => {
     if (!userEmail) return;
 
-    const storedNotes = localStorage.getItem(notesKey);
+    // Subscribe to real-time note updates from Firestore
+    const unsubscribe = subscribeToUserNotes(userEmail, (fetchedNotes) => {
+      setNotes(fetchedNotes);
+      setIsHydrated(true);
 
-    if (storedNotes && JSON.parse(storedNotes).length > 0) {
-      setNotes(JSON.parse(storedNotes));
-    } else {
-      const defaultNotes = [
-        {
-          id: Date.now(),
-          title: "Welcome Note",
-          content: "This is your personal notes space.",
-          date: new Date().toISOString().split("T")[0],
-          summary: null,
-        },
-      ];
+      // Auto-select first note if none selected
+      if (fetchedNotes.length > 0 && !selectedNote) {
+        setSelectedNote(fetchedNotes[0]);
+      }
+    });
 
-      setNotes(defaultNotes);
-      localStorage.setItem(notesKey, JSON.stringify(defaultNotes));
-    }
-
-    setIsHydrated(true);
-  }, [userEmail, notesKey]);
-
-  useEffect(() => {
-    if (isHydrated && userEmail) {
-      localStorage.setItem(notesKey, JSON.stringify(notes));
-    }
-  }, [notes, isHydrated, userEmail, notesKey]);
+    return unsubscribe; // Cleanup subscription
+  }, [userEmail]);
 
   useEffect(() => {
     if (notes.length > 0 && !selectedNote) {
       setSelectedNote(notes[0]);
     }
-  }, [notes]);
+  }, [notes, selectedNote]);
 
   useEffect(() => {
     if (!localStorage.getItem("isLoggedIn")) {
@@ -128,12 +122,8 @@ export default function Dashboard() {
 
       const aiSummary = await summarizeWithAI(note.content);
 
-      const updatedNotes = notes.map((n) =>
-        n.id === note.id ? { ...n, summary: aiSummary } : n
-      );
-
-      setNotes(updatedNotes);
-      setSelectedNote(updatedNotes.find((n) => n.id === note.id));
+      // Update note in Firestore
+      await updateSummary(note.id, aiSummary);
     } catch (error) {
       console.error(error);
       alert("AI summarization failed. Please try again.");
@@ -142,63 +132,56 @@ export default function Dashboard() {
     }
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!newNoteTitle || !newNoteContent) return;
 
-    if (isEditing) {
-      const updatedNotes = notes.map((note) =>
-        note.id === editingId
-          ? {
-              ...note,
-              title: newNoteTitle,
-              content: newNoteContent,
-              summary: null,
-            }
-          : note
-      );
+    try {
+      if (isEditing) {
+        // Update existing note
+        await updateNote(editingId, {
+          title: newNoteTitle,
+          content: newNoteContent,
+          summary: null,
+        });
 
-      setNotes(updatedNotes);
-      setSelectedNote(updatedNotes.find((note) => note.id === editingId));
-      setIsEditing(false);
-      setEditingId(null);
-    } else {
-      const newNote = {
-        id: Date.now(),
-        title: newNoteTitle,
-        content: newNoteContent,
-        date: new Date().toISOString().split("T")[0],
-        summary: null,
-      };
+        setIsEditing(false);
+        setEditingId(null);
+      } else {
+        // Create new note
+        await createNote(userEmail, newNoteTitle, newNoteContent);
+      }
 
-      setNotes([newNote, ...notes]);
-      setSelectedNote(newNote);
+      setNewNoteTitle("");
+      setNewNoteContent("");
+      setShowNewNote(false);
+      setShowMobileContent(false);
+    } catch (error) {
+      console.error("Error saving note:", error);
+      alert("Failed to save note. Please try again.");
     }
-
-    setNewNoteTitle("");
-    setNewNoteContent("");
-    setShowNewNote(false);
-    setShowMobileContent(false); // Close mobile view
   };
 
-  const handleDeleteNote = (id) => {
-    setNotes(notes.filter((note) => note.id !== id));
-    setSelectedNote(null);
-    setShowMobileContent(false); // Close mobile view
+  const handleDeleteNote = async (id) => {
+    try {
+      await deleteNote(id);
+      setSelectedNote(null);
+      setShowMobileContent(false);
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      alert("Failed to delete note. Please try again.");
+    }
   };
 
   // ❤️ NEW: Toggle favorite status
-  const handleToggleFavorite = (id) => {
-    const updatedNotes = notes.map((note) =>
-      note.id === id
-        ? { ...note, isFavorite: !note.isFavorite }
-        : note
-    );
-
-    setNotes(updatedNotes);
-    
-    const updatedSelectedNote = updatedNotes.find((n) => n.id === id);
-    if (selectedNote?.id === id) {
-      setSelectedNote(updatedSelectedNote);
+  const handleToggleFavorite = async (id) => {
+    try {
+      const note = notes.find((n) => n.id === id);
+      if (note) {
+        await toggleFavorite(id, note.isFavorite);
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      alert("Failed to update favorite status. Please try again.");
     }
   };
 
@@ -241,17 +224,15 @@ export default function Dashboard() {
         });
       }
 
-      const pdfNote = {
-        id: Date.now(),
-        title: file.name,
-        content: text.slice(0, 2000),
-        date: new Date().toISOString().split("T")[0],
-        summary: pageSummaries,
-      };
+      // Create note in Firestore with PDF content
+      await createNote(
+        userEmail,
+        file.name,
+        text.slice(0, 2000),
+        pageSummaries
+      );
 
-      setNotes((prev) => [pdfNote, ...prev]);
-      setSelectedNote(pdfNote);
-      setShowMobileContent(true); // Show on mobile
+      setShowMobileContent(true);
     } catch (err) {
       console.error(err);
       alert(err.message || "PDF processing failed");
@@ -338,12 +319,8 @@ export default function Dashboard() {
 
       const quiz = await generateQuizWithAI(note.content);
 
-      const updatedNotes = notes.map((n) =>
-        n.id === note.id ? { ...n, quiz } : n
-      );
-
-      setNotes(updatedNotes);
-      setSelectedNote(updatedNotes.find((n) => n.id === note.id));
+      // Update note in Firestore
+      await updateQuiz(note.id, quiz);
     } catch (err) {
       alert("Quiz generation failed");
     } finally {

@@ -1,6 +1,23 @@
 export async function handler(event) {
   try {
+    // Validate API key
+    if (!process.env.GROQ_API_KEY) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          error: "GROQ_API_KEY not set in environment variables" 
+        }),
+      };
+    }
+
     const { text } = JSON.parse(event.body);
+
+    if (!text) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Text is required" }),
+      };
+    }
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -44,8 +61,17 @@ Format:
 
     const data = await response.json();
 
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ 
+          error: data.error?.message || "Groq API error" 
+        }),
+      };
+    }
+
     if (!data.choices) {
-      throw new Error("Invalid AI response");
+      throw new Error("Invalid AI response from Groq");
     }
 
     const quizJson = JSON.parse(data.choices[0].message.content);
@@ -59,9 +85,10 @@ Format:
     };
 
   } catch (err) {
+    console.error("Generate quiz function error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify({ error: err.message || "Internal server error" }),
     };
   }
 }

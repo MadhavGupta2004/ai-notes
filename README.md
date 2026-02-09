@@ -9,12 +9,13 @@ It also supports **PDF uploads**, **per-user data isolation**, **analytics**, an
 
 ### 🔐 Authentication
 - Google Sign-In using Firebase Auth
-- Protected routes (Auth / Dashboard / Analytics)
-- Per-user data isolation using email-based storage
+- Protected routes (Auth / Dashboard / Analytics / Favorites)
+- Per-user data isolation using Firestore
 
 ### 📝 Notes Management
 - Create, edit, delete notes
-- Auto-save notes to local storage (per user)
+- Cloud storage with **Firestore** (syncs across all devices!)
+- ❤️ Favorite notes feature
 - Clean and modern dashboard UI
 
 ### 🤖 AI Summarization
@@ -58,7 +59,7 @@ It also supports **PDF uploads**, **per-user data isolation**, **analytics**, an
 
 ### Auth & Services
 - Firebase Authentication (Google Sign-In)
-- LocalStorage (per-user data)
+- **Firestore Database** (cloud-hosted notes with real-time sync)
 
 ---
 

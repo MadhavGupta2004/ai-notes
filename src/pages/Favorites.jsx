@@ -3,12 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import TopNavbar from "../components/TopNavbar";
+import {
+  subscribeToUserNotes,
+  toggleFavorite,
+  updateSummary,
+} from "../firebaseDB";
 
 export default function Favorites() {
   const navigate = useNavigate();
 
   const userEmail = localStorage.getItem("userEmail");
-  const notesKey = `notes_${userEmail}`;
 
   const [notes, setNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);
@@ -26,22 +30,14 @@ export default function Favorites() {
   useEffect(() => {
     if (!userEmail) return;
 
-    const storedNotes = localStorage.getItem(notesKey);
+    // Subscribe to real-time note updates from Firestore
+    const unsubscribe = subscribeToUserNotes(userEmail, (fetchedNotes) => {
+      setNotes(fetchedNotes);
+      setIsHydrated(true);
+    });
 
-    if (storedNotes && JSON.parse(storedNotes).length > 0) {
-      setNotes(JSON.parse(storedNotes));
-    } else {
-      setNotes([]);
-    }
-
-    setIsHydrated(true);
-  }, [userEmail, notesKey]);
-
-  useEffect(() => {
-    if (isHydrated && userEmail) {
-      localStorage.setItem(notesKey, JSON.stringify(notes));
-    }
-  }, [notes, isHydrated, userEmail, notesKey]);
+    return unsubscribe; // Cleanup subscription
+  }, [userEmail]);
 
   useEffect(() => {
     if (!localStorage.getItem("isLoggedIn")) {
@@ -89,22 +85,20 @@ export default function Favorites() {
     return [...titleMatches, ...contentMatches];
   };
 
-  const handleToggleFavorite = (id) => {
-    const updatedNotes = notes.map((note) =>
-      note.id === id
-        ? { ...note, isFavorite: !note.isFavorite }
-        : note
-    );
-
-    setNotes(updatedNotes);
-
-    const updatedSelectedNote = updatedNotes.find((n) => n.id === id);
-    if (selectedNote?.id === id) {
-      if (updatedSelectedNote.isFavorite) {
-        setSelectedNote(updatedSelectedNote);
-      } else {
-        setSelectedNote(null);
+  const handleToggleFavorite = async (id) => {
+    try {
+      const note = notes.find((n) => n.id === id);
+      if (note) {
+        await toggleFavorite(id, note.isFavorite);
+        
+        // If unfavoriting from favorites page, deselect it
+        if (selectedNote?.id === id && !note.isFavorite) {
+          setSelectedNote(null);
+        }
       }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      alert("Failed to update favorite status. Please try again.");
     }
   };
 
@@ -139,12 +133,8 @@ export default function Favorites() {
 
       const aiSummary = await summarizeWithAI(note.content);
 
-      const updatedNotes = notes.map((n) =>
-        n.id === note.id ? { ...n, summary: aiSummary } : n
-      );
-
-      setNotes(updatedNotes);
-      setSelectedNote(updatedNotes.find((n) => n.id === note.id));
+      // Update note in Firestore
+      await updateSummary(note.id, aiSummary);
     } catch (error) {
       console.error(error);
       alert("AI summarization failed. Please try again.");

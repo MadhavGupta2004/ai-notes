@@ -3,19 +3,25 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 import TopNavbar from "../components/TopNavbar";
+import { subscribeToUserNotes } from "../firebaseDB";
 
 
 export default function Analytics() {
   const navigate = useNavigate();
   const userEmail = localStorage.getItem("userEmail");
-  const notesKey = `notes_${userEmail}`;
 
   const [notes, setNotes] = useState([]);
 
   useEffect(() => {
-    const storedNotes = JSON.parse(localStorage.getItem(notesKey)) || [];
-    setNotes(storedNotes);
-  }, [notesKey]);
+    if (!userEmail) return;
+
+    // Subscribe to real-time note updates from Firestore
+    const unsubscribe = subscribeToUserNotes(userEmail, (fetchedNotes) => {
+      setNotes(fetchedNotes);
+    });
+
+    return unsubscribe; // Cleanup subscription
+  }, [userEmail]);
   // 📊 CALCULATIONS
   const totalNotes = notes.length;
 

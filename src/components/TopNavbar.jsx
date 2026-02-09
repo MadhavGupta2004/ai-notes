@@ -12,6 +12,7 @@ export default function TopNavbar({ title }) {
   const isDashboard = location.pathname === "/dashboard";
   const isAnalytics = location.pathname === "/analytics";
   const isFavorites = location.pathname === "/favorites";
+  const isSettings = location.pathname === "/settings";
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -217,6 +218,16 @@ export default function TopNavbar({ title }) {
 
               <li>
                 <button
+                  className="dropdown-item"
+                  onClick={() => navigate("/settings")}
+                >
+                  <i className="fas fa-cog me-2"></i>
+                  Settings
+                </button>
+              </li>
+
+              <li>
+                <button
                   className="dropdown-item text-danger"
                   onClick={handleLogout}
                 >
@@ -277,6 +288,17 @@ export default function TopNavbar({ title }) {
             >
               <i className="fas fa-chart-bar me-2"></i>
               Analytics
+            </button>
+
+            <button
+              className={`btn btn-outline-secondary`}
+              onClick={() => {
+                navigate("/settings");
+                setMenuOpen(false);
+              }}
+            >
+              <i className="fas fa-cog me-2"></i>
+              Settings
             </button>
           </div>
 
