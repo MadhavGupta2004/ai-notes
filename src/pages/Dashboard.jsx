@@ -88,6 +88,8 @@ export default function Dashboard() {
     }
 
     localStorage.clear();
+    // Dispatch custom event to trigger re-renders in same tab
+    window.dispatchEvent(new Event("authStateChanged"));
     navigate("/auth", { replace: true });
   };
 
@@ -521,6 +523,43 @@ export default function Dashboard() {
           margin-bottom: 15px;
         }
 
+        .loading-skeleton-container {
+          text-align: center;
+          padding: 40px 20px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .loading-skeleton-container .spinner-border {
+          width: 3rem;
+          height: 3rem;
+        }
+
+        .skeleton-item {
+          height: 80px;
+          background: linear-gradient(
+            90deg,
+            #f0f0f0 25%,
+            #e0e0e0 50%,
+            #f0f0f0 75%
+          );
+          background-size: 200% 100%;
+          animation: loading 1.5s infinite;
+          border-radius: 8px;
+          margin-bottom: 12px;
+        }
+
+        @keyframes loading {
+          0% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+
         /* 📱 NEW: Mobile overlay styles */
         .mobile-content-overlay {
           display: none;
@@ -684,7 +723,19 @@ export default function Dashboard() {
                 </div>
 
                 <div className="notes-scroll-container">
-                  {filteredNotes.length > 0 ? (
+                  {!isHydrated ? (
+                    <div className="loading-skeleton-container">
+                      <div className="spinner-border text-primary mb-3" role="status">
+                        <span className="visually-hidden">Loading notes...</span>
+                      </div>
+                      <p className="text-muted">Fetching your notes from server...</p>
+                      
+                      {/* Skeleton loaders */}
+                      <div className="skeleton-item"></div>
+                      <div className="skeleton-item"></div>
+                      <div className="skeleton-item"></div>
+                    </div>
+                  ) : filteredNotes.length > 0 ? (
                     filteredNotes.map((note) => (
                       <div
                         key={note.id}

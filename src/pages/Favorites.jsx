@@ -53,6 +53,8 @@ export default function Favorites() {
     }
 
     localStorage.clear();
+    // Dispatch custom event to trigger re-renders in same tab
+    window.dispatchEvent(new Event("authStateChanged"));
     navigate("/auth", { replace: true });
   };
 

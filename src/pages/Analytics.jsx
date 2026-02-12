@@ -90,6 +90,8 @@ const handleLogout = async () => {
   localStorage.removeItem("userEmail");
   localStorage.removeItem("userId");
 
+  // Dispatch custom event to trigger re-renders in same tab
+  window.dispatchEvent(new Event("authStateChanged"));
   navigate("/auth");
 };
 

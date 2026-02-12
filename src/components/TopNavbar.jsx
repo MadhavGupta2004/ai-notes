@@ -20,6 +20,8 @@ export default function TopNavbar({ title }) {
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userId");
     setMenuOpen(false);
+    // Dispatch custom event to trigger re-renders in same tab
+    window.dispatchEvent(new Event("authStateChanged"));
     navigate("/auth");
   };
 

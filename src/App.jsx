@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import Login from "./auth/Login";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
@@ -8,7 +9,26 @@ import NotFound from "./pages/Notfound";
 import ProtectedRoute from "./layout/ProtectedRoute";
 
 function App() {
-  const isLoggedIn = localStorage.getItem("isLoggedIn");
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem("isLoggedIn");
+  });
+
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setIsLoggedIn(!!localStorage.getItem("isLoggedIn"));
+    };
+
+    // Listen for custom auth change event (same tab)
+    window.addEventListener("authStateChanged", handleAuthChange);
+    
+    // Listen for storage changes (other tabs)
+    window.addEventListener("storage", handleAuthChange);
+    
+    return () => {
+      window.removeEventListener("authStateChanged", handleAuthChange);
+      window.removeEventListener("storage", handleAuthChange);
+    };
+  }, []);
 
   return (
     <BrowserRouter>
