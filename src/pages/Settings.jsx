@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
+import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 import { auth } from "../firebase";
 import TopNavbar from "../components/TopNavbar";
 
@@ -13,6 +13,7 @@ export default function Settings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const isLoggedIn = localStorage.getItem("isLoggedIn");
 
@@ -39,65 +40,82 @@ export default function Settings() {
     navigate("/auth", { replace: true });
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     setMessage("");
+    setLoading(true);
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       setMessage("Please fill in all fields");
       setMessageType("error");
+      setLoading(false);
       return;
     }
 
     if (newPassword !== confirmPassword) {
       setMessage("New passwords don't match");
       setMessageType("error");
+      setLoading(false);
       return;
     }
 
     if (newPassword.length < 6) {
       setMessage("New password must be at least 6 characters");
       setMessageType("error");
+      setLoading(false);
       return;
     }
 
     if (currentPassword === newPassword) {
       setMessage("New password must be different from current password");
       setMessageType("error");
+      setLoading(false);
       return;
     }
 
-    // Verify current password
-    const users = JSON.parse(localStorage.getItem("users")) || [];
-    const user = users.find(u => u.email === userEmail);
+    try {
+      const user = auth.currentUser;
 
-    if (!user) {
-      setMessage("Account not found. Please re-login.");
+      if (!user) {
+        setMessage("Session expired. Please log in again.");
+        setMessageType("error");
+        setLoading(false);
+        return;
+      }
+
+      // Reauthenticate user with current password
+      const credential = EmailAuthProvider.credential(userEmail, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password
+      await updatePassword(user, newPassword);
+
+      setMessage("✓ Password changed successfully!");
+      setMessageType("success");
+      
+      // Reset form
+      setTimeout(() => {
+        setIsChangingPassword(false);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setMessage("");
+        setLoading(false);
+      }, 2000);
+    } catch (err) {
+      setLoading(false);
+      if (err.code === "auth/wrong-password") {
+        setMessage("Current password is incorrect");
+      } else if (err.code === "auth/requires-recent-login") {
+        setMessage("Please log out and log in again to change your password");
+      } else if (err.code === "auth/weak-password") {
+        setMessage("New password is too weak. Please use a stronger password");
+      } else {
+        setMessage(err.message || "Failed to change password. Please try again.");
+      }
       setMessageType("error");
-      return;
+      console.error("Password change error:", err);
     }
-
-    if (user.password !== currentPassword) {
-      setMessage("Current password is incorrect");
-      setMessageType("error");
-      return;
-    }
-
-    // Update password
-    user.password = newPassword;
-    const updatedUsers = users.map(u => u.email === userEmail ? user : u);
-    localStorage.setItem("users", JSON.stringify(updatedUsers));
-
-    setMessage("✓ Password changed successfully!");
-    setMessageType("success");
-    
-    // Reset form
-    setTimeout(() => {
-      setIsChangingPassword(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setMessage("");
-    }, 2000);
+  };
   };
 
   return (
@@ -296,9 +314,19 @@ export default function Settings() {
                   <button
                     className="btn btn-gradient flex-grow-1"
                     onClick={handleChangePassword}
+                    disabled={loading}
                   >
-                    <i className="fas fa-save me-2"></i>
-                    Save New Password
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-save me-2"></i>
+                        Save New Password
+                      </>
+                    )}
                   </button>
                   <button
                     className="btn btn-outline-secondary"
@@ -354,4 +382,4 @@ export default function Settings() {
       </div>
     </>
   );
-}
+

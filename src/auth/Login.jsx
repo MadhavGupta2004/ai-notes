@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup } from "firebase/auth";
+import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 
 export default function Login() {
@@ -11,74 +11,110 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
-  const [tempPassword, setTempPassword] = useState('');
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError("");
+    setLoading(true);
 
     if (!email || !password) {
       setError("Please enter both email and password.");
+      setLoading(false);
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("users")) || [];
-    const user = users.find(u => u.email === email);
-
-    if (!user) {
-      setError("Account not found. Please sign up.");
-      return;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Store in localStorage for persistent session tracking
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("userEmail", user.email);
+      
+      // Dispatch event for same-tab reactivity
+      window.dispatchEvent(new Event("authStateChanged"));
+      
+      navigate("/dashboard");
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        setError("Account not found. Please sign up.");
+      } else if (err.code === "auth/wrong-password") {
+        setError("Incorrect password. Please try again.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email address.");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Too many login attempts. Please try again later.");
+      } else {
+        setError(err.message || "Login failed. Please try again.");
+      }
+      console.error("Login Error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    if (user.password !== password) {
-      setError("Incorrect password. Please try again.");
-      return;
-    }
-
-    // Success
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("userEmail", user.email);
-    navigate("/dashboard");
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     setError("");
+    setLoading(true);
 
     if (!name || !email || !password) {
       setError("Please enter all fields.");
+      setLoading(false);
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("users")) || [];
-    const userExists = users.find(u => u.email === email);
-    
-    if (userExists) {
-      setError("Account already exists. Please login.");
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      setLoading(false);
       return;
     }
 
-    users.push({ name, email, password });
-    localStorage.setItem("users", JSON.stringify(users));
-
-    // Auto login after signup
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("userEmail", email);
-    navigate("/dashboard");
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Store in localStorage for persistent session tracking
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("userEmail", user.email);
+      
+      // Dispatch event for same-tab reactivity
+      window.dispatchEvent(new Event("authStateChanged"));
+      
+      navigate("/dashboard");
+    } catch (err) {
+      if (err.code === "auth/email-already-in-use") {
+        setError("Account already exists. Please login instead.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email address.");
+      } else if (err.code === "auth/weak-password") {
+        setError("Password is too weak. Please use a stronger password.");
+      } else {
+        setError(err.message || "Sign up failed. Please try again.");
+      }
+      console.error("Signup Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
     try {
       setError("");
+      setLoading(true);
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
       localStorage.setItem("isLoggedIn", "true");
       localStorage.setItem("userEmail", user.email);
+      
+      // Dispatch event for same-tab reactivity
+      window.dispatchEvent(new Event("authStateChanged"));
+      
       navigate("/dashboard");
     } catch (err) {
-      // Handle specific Firebase auth errors
       if (err.code === "auth/popup-blocked") {
         setError("Pop-up was blocked. Please allow pop-ups and try again.");
       } else if (err.code === "auth/cancelled-popup-request") {
@@ -86,60 +122,46 @@ export default function Login() {
       } else if (err.code === "auth/popup-closed-by-user") {
         setError("Pop-up closed. Please try again.");
       } else {
-        setError("Google sign-in failed. Please try again or check the console.");
+        setError("Google sign-in failed. Please try again.");
       }
-      console.error("Google Login Error:", err.code, err.message);
+      console.error("Google Login Error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      isLogin ? handleLogin() : handleSignup();
-    }
-  };
-
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     setError("");
-    setResetSuccess(false);
 
     if (!forgotEmail) {
       setError("Please enter your email address.");
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("users")) || [];
-    let user = users.find(u => u.email === forgotEmail);
-
-    if (!user) {
-      // If no local account exists, create one with a temporary password
-      // This allows Google auth users to also use email/password login
-      const generatedTempPassword = Math.random().toString(36).slice(-8).toUpperCase();
-      
-      const newUser = {
-        name: forgotEmail.split('@')[0],
-        email: forgotEmail,
-        password: generatedTempPassword
-      };
-
-      users.push(newUser);
-      localStorage.setItem("users", JSON.stringify(users));
-
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, forgotEmail);
       setResetSuccess(true);
-      setTempPassword(generatedTempPassword);
-      // Don't clear forgotEmail here, we need it for display
-      return;
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        setError("No account found with this email address.");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Invalid email address.");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Too many reset attempts. Please try again later.");
+      } else {
+        setError(err.message || "Failed to send reset email. Please try again.");
+      }
+      console.error("Password Reset Error:", err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // If account exists, update password
-    const generatedTempPassword = Math.random().toString(36).slice(-8).toUpperCase();
-    user.password = generatedTempPassword;
-    const updatedUsers = users.map(u => u.email === forgotEmail ? user : u);
-    localStorage.setItem("users", JSON.stringify(updatedUsers));
-
-    // Show success with temp password
-    setResetSuccess(true);
-    setTempPassword(generatedTempPassword);
-    // Don't clear forgotEmail here, we need it for display
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !loading) {
+      isLogin ? handleLogin() : handleSignup();
+    }
   };
 
   return (
@@ -333,13 +355,22 @@ export default function Login() {
               <button
                 className="btn btn-gradient w-100"
                 onClick={isLogin ? handleLogin : handleSignup}
+                disabled={loading}
               >
-                {isLogin ? "Login" : "Sign Up"}
+                {loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    {isLogin ? "Logging in..." : "Creating account..."}
+                  </>
+                ) : (
+                  isLogin ? "Login" : "Sign Up"
+                )}
               </button>
 
               <button
                 onClick={handleGoogleLogin}
                 className="btn btn-outline-dark w-100 mt-2"
+                disabled={loading}
               >
                 <i className="fab fa-google me-2"></i>
                 Continue with Google
@@ -412,57 +443,42 @@ export default function Login() {
                   <button
                     className="btn btn-gradient w-100"
                     onClick={handleForgotPassword}
+                    disabled={loading}
                   >
-                    <i className="fas fa-paper-plane me-2"></i>
-                    Reset Password
+                    {loading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Sending email...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-paper-plane me-2"></i>
+                        Send Reset Email
+                      </>
+                    )}
                   </button>
                 </>
               ) : (
                 <>
                   <div className="alert alert-success alert-custom mb-3">
                     <i className="fas fa-check-circle me-2"></i>
-                    <strong>Password ready!</strong>
+                    <strong>Email sent!</strong>
                   </div>
 
                   <div className="alert alert-info alert-custom mb-3">
-                    <small>
-                      <strong>ℹ️ Note:</strong> If you use Google Sign-In, your notes will still sync because we use your email address to maintain your data.
+                    <strong>📧 Check your email</strong>
+                    <p className="mb-2 mt-2">
+                      We've sent a password reset link to <strong>{forgotEmail}</strong>
+                    </p>
+                    <small className="text-muted">
+                      Click the link to reset your password. If you don't see the email, check your spam folder.
                     </small>
                   </div>
 
-                  <div className="card border-2 border-primary mb-3" style={{borderColor: '#667eea !important'}}>
-                    <div className="card-body p-3">
-                      <p className="text-muted small mb-2">Your temporary password:</p>
-                      <div className="input-group">
-                        <input
-                          type="text"
-                          className="form-control fw-bold"
-                          value={tempPassword}
-                          readOnly
-                          style={{fontSize: '1.1rem', letterSpacing: '2px'}}
-                        />
-                        <button
-                          className="btn btn-outline-primary"
-                          onClick={() => {
-                            navigator.clipboard.writeText(tempPassword);
-                            alert("✓ Copied to clipboard!");
-                          }}
-                        >
-                          <i className="fas fa-copy"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="alert alert-info alert-custom mb-3">
-                    <strong>📋 Next steps:</strong>
-                    <ul className="mb-0 mt-2">
-                      <li>Copy the password above (click the copy button)</li>
-                      <li>Click "Back to Login" below</li>
-                      <li>Enter your email: <code>{forgotEmail || userEmail || "your@email.com"}</code></li>
-                      <li>Paste the temporary password</li>
-                      <li>After login, go to Settings to change your password</li>
-                    </ul>
+                  <div className="alert alert-warning alert-custom mb-3">
+                    <small>
+                      <strong>💡 Tip:</strong> The link will expire in 1 hour. If you need a new reset link, just come back here.
+                    </small>
                   </div>
 
                   <button
@@ -472,7 +488,6 @@ export default function Login() {
                       setError("");
                       setResetSuccess(false);
                       setForgotEmail("");
-                      setTempPassword("");
                     }}
                   >
                     <i className="fas fa-arrow-left me-2"></i>
