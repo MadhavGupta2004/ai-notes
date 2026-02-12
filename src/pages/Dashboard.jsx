@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 import TopNavbar from "../components/TopNavbar";
 import * as pdfjsLib from "pdfjs-dist";
@@ -20,7 +20,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  const userEmail = localStorage.getItem("userEmail");
+  const [userEmail, setUserEmail] = useState(() => {
+    return auth.currentUser?.email || localStorage.getItem("userEmail") || null;
+  });
 
   const [notes, setNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);
@@ -67,6 +69,26 @@ export default function Dashboard() {
 
     return unsubscribe; // Cleanup subscription
   }, [userEmail]);
+
+
+  // Keep track of Firebase auth state so userEmail becomes available as soon as auth finishes
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user && user.email) {
+        setUserEmail(user.email);
+        try {
+          localStorage.setItem("userEmail", user.email);
+        } catch (e) {}
+      } else {
+        setUserEmail(null);
+        try {
+          localStorage.removeItem("userEmail");
+        } catch (e) {}
+      }
+    });
+
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (notes.length > 0 && !selectedNote) {
