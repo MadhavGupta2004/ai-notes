@@ -8,7 +8,7 @@ import { subscribeToUserNotes } from "../firebaseDB";
 
 export default function Analytics() {
   const navigate = useNavigate();
-  const userEmail = localStorage.getItem("userEmail");
+  const userEmail = auth.currentUser?.email || localStorage.getItem("userEmail");
 
   const [notes, setNotes] = useState([]);
 

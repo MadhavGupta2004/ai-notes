@@ -1,9 +1,10 @@
 import { Navigate } from "react-router-dom";
+import { auth } from "../firebase";
 
 export default function ProtectedRoute({ children }) {
-  const isLoggedIn = localStorage.getItem("isLoggedIn");
+  const user = auth.currentUser;
 
-  if (!isLoggedIn) {
+  if (!user) {
     return <Navigate to="/auth" replace />;
   }
 

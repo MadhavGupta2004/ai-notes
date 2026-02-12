@@ -6,7 +6,7 @@ import { auth } from "../firebase";
 export default function TopNavbar({ title }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const userEmail = localStorage.getItem("userEmail");
+  const userEmail = auth.currentUser?.email || localStorage.getItem("userEmail");
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isDashboard = location.pathname === "/dashboard";

@@ -12,7 +12,7 @@ import {
 export default function Favorites() {
   const navigate = useNavigate();
 
-  const userEmail = localStorage.getItem("userEmail");
+  const userEmail = auth.currentUser?.email || localStorage.getItem("userEmail");
 
   const [notes, setNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);
@@ -21,7 +21,7 @@ export default function Favorites() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showMobileContent, setShowMobileContent] = useState(false);
 
-  const isLoggedIn = localStorage.getItem("isLoggedIn");
+  const isLoggedIn = !!auth.currentUser;
 
   if (!isLoggedIn) {
     return null;
@@ -40,7 +40,7 @@ export default function Favorites() {
   }, [userEmail]);
 
   useEffect(() => {
-    if (!localStorage.getItem("isLoggedIn")) {
+    if (!auth.currentUser) {
       navigate("/auth");
     }
   }, []);

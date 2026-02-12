@@ -6,7 +6,7 @@ import TopNavbar from "../components/TopNavbar";
 
 export default function Settings() {
   const navigate = useNavigate();
-  const userEmail = localStorage.getItem("userEmail");
+  const userEmail = auth.currentUser?.email || localStorage.getItem("userEmail");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -15,7 +15,7 @@ export default function Settings() {
   const [messageType, setMessageType] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const isLoggedIn = localStorage.getItem("isLoggedIn");
+  const isLoggedIn = !!auth.currentUser;
 
   if (!isLoggedIn) {
     return null;
