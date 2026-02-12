@@ -16,13 +16,8 @@ export default function TopNavbar({ title }) {
 
   const handleLogout = async () => {
     await signOut(auth);
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userId");
     setMenuOpen(false);
-    // Dispatch custom event to trigger re-renders in same tab
-    window.dispatchEvent(new Event("authStateChanged"));
-    navigate("/auth");
+    // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
   };
 
   return (

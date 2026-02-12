@@ -30,13 +30,7 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // Store in localStorage for persistent session tracking
-      localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userEmail", user.email);
-      
-      // Dispatch event for same-tab reactivity
-      window.dispatchEvent(new Event("authStateChanged"));
-      
+      // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
       navigate("/dashboard");
     } catch (err) {
       if (err.code === "auth/user-not-found") {
@@ -76,13 +70,7 @@ export default function Login() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // Store in localStorage for persistent session tracking
-      localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userEmail", user.email);
-      
-      // Dispatch event for same-tab reactivity
-      window.dispatchEvent(new Event("authStateChanged"));
-      
+      // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
       navigate("/dashboard");
     } catch (err) {
       if (err.code === "auth/email-already-in-use") {
@@ -101,18 +89,11 @@ export default function Login() {
   };
 
   const handleGoogleLogin = async () => {
+    setError("");
+    setLoading(true);
     try {
-      setError("");
-      setLoading(true);
       const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userEmail", user.email);
-      
-      // Dispatch event for same-tab reactivity
-      window.dispatchEvent(new Event("authStateChanged"));
-      
+      // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
       navigate("/dashboard");
     } catch (err) {
       if (err.code === "auth/popup-blocked") {

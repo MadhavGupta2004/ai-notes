@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "./firebase";
 import Login from "./auth/Login";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
@@ -9,26 +11,42 @@ import NotFound from "./pages/Notfound";
 import ProtectedRoute from "./layout/ProtectedRoute";
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return !!localStorage.getItem("isLoggedIn");
-  });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const handleAuthChange = () => {
-      setIsLoggedIn(!!localStorage.getItem("isLoggedIn"));
-    };
+    // Listen to Firebase auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsLoggedIn(true);
+        localStorage.setItem("isLoggedIn", "true");
+        localStorage.setItem("userEmail", user.email);
+      } else {
+        setIsLoggedIn(false);
+        localStorage.removeItem("isLoggedIn");
+        localStorage.removeItem("userEmail");
+      }
+      setLoading(false);
+    });
 
-    // Listen for custom auth change event (same tab)
-    window.addEventListener("authStateChanged", handleAuthChange);
-    
-    // Listen for storage changes (other tabs)
-    window.addEventListener("storage", handleAuthChange);
-    
-    return () => {
-      window.removeEventListener("authStateChanged", handleAuthChange);
-      window.removeEventListener("storage", handleAuthChange);
-    };
+    return unsubscribe;
   }, []);
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <div className="spinner-border text-light" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>

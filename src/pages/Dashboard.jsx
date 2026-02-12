@@ -86,11 +86,7 @@ export default function Dashboard() {
     } catch (e) {
       console.log("Firebase signout failed (safe to ignore)");
     }
-
-    localStorage.clear();
-    // Dispatch custom event to trigger re-renders in same tab
-    window.dispatchEvent(new Event("authStateChanged"));
-    navigate("/auth", { replace: true });
+    // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
   };
 
   const getFilteredNotes = () => {

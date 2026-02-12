@@ -86,13 +86,7 @@ last365Days.forEach((item, index) => {
 });
 const handleLogout = async () => {
   await signOut(auth);
-  localStorage.removeItem("isLoggedIn");
-  localStorage.removeItem("userEmail");
-  localStorage.removeItem("userId");
-
-  // Dispatch custom event to trigger re-renders in same tab
-  window.dispatchEvent(new Event("authStateChanged"));
-  navigate("/auth");
+  // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
 };
 
 
