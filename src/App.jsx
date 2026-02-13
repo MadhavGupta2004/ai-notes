@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink } from "firebase/auth";
 import { auth } from "./firebase";
-import Login from "./auth/Login";
+import Login from "./auth/login";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
 import Favorites from "./pages/Favorites";
@@ -15,6 +15,28 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Handle incoming email sign-in links (magic link)
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      let email = window.localStorage.getItem('emailForSignIn');
+      if (!email) {
+        email = window.prompt('Please enter your email to complete sign-in:');
+      }
+
+      if (email) {
+        setLoading(true);
+        signInWithEmailLink(auth, email, window.location.href)
+          .then(() => {
+            window.localStorage.removeItem('emailForSignIn');
+            // Redirect to dashboard after successful sign-in
+            window.location.href = '/dashboard';
+          })
+          .catch((err) => {
+            console.error('Error signing in with email link:', err);
+            setLoading(false);
+          });
+      }
+    }
+
     // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {

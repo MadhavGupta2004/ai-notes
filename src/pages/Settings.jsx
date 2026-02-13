@@ -112,8 +112,6 @@ export default function Settings() {
       console.error("Password change error:", err);
     }
   };
-  };
-
   return (
     <>
       <link
@@ -378,4 +376,5 @@ export default function Settings() {
       </div>
     </>
   );
+};
 
