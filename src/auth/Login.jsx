@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, sendSignInLinkToEmail } from "firebase/auth";
+import { signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 
 export default function Login() {
@@ -15,7 +15,6 @@ export default function Login() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   const isValidEmail = (e) => {
     if (!e) return false;
@@ -42,10 +41,7 @@ export default function Login() {
     }
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, emailTrim, password);
-      const user = userCredential.user;
-      
-      // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
+      await signInWithEmailAndPassword(auth, emailTrim, password);
       navigate("/dashboard");
     } catch (err) {
       if (err.code === "auth/user-not-found") {
@@ -91,10 +87,7 @@ export default function Login() {
     }
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, emailTrim, password);
-      const user = userCredential.user;
-      
-      // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
+      await createUserWithEmailAndPassword(auth, emailTrim, password);
       navigate("/dashboard");
     } catch (err) {
       if (err.code === "auth/email-already-in-use") {
@@ -118,8 +111,7 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      // Firebase auth state will be updated automatically via onAuthStateChanged in App.jsx
+      await signInWithPopup(auth, googleProvider);
       navigate("/dashboard");
     } catch (err) {
       if (err.code === "auth/popup-blocked") {
@@ -160,45 +152,6 @@ export default function Login() {
         setError(err.message || "Failed to send reset email. Please try again.");
       }
       console.error("Password Reset Error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendMagicLink = async () => {
-    setError("");
-    const emailTrim = email?.trim();
-    if (!emailTrim) {
-      setError("Please enter your email to receive a sign-in link.");
-      return;
-    }
-
-    if (!isValidEmail(emailTrim)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
-    setLoading(true);
-    const actionCodeSettings = {
-      // After clicking the link the user will be redirected back to /auth
-      url: window.location.origin + '/auth',
-      handleCodeInApp: true,
-    };
-
-    try {
-      await sendSignInLinkToEmail(auth, emailTrim, actionCodeSettings);
-      // Save the email locally to complete sign-in on this device if needed
-      window.localStorage.setItem('emailForSignIn', email);
-      setMagicLinkSent(true);
-    } catch (err) {
-      if (err.code === 'auth/operation-not-allowed') {
-        setError('Email link sign-in is disabled in your Firebase project. Enable it under Authentication → Sign-in method.');
-      } else if (err.code === 'auth/invalid-email') {
-        setError('Invalid email address.');
-      } else {
-        setError(err.message || 'Failed to send sign-in link. Please try again.');
-      }
-      console.error('Magic Link Error:', err);
     } finally {
       setLoading(false);
     }
@@ -421,25 +374,6 @@ export default function Login() {
                 <i className="fab fa-google me-2"></i>
                 Continue with Google
               </button>
-
-              {isLogin && (
-                <>
-                  <button
-                    onClick={handleSendMagicLink}
-                    className="btn btn-outline-primary w-100 mt-2"
-                    disabled={loading}
-                  >
-                    <i className="fas fa-link me-2"></i>
-                    Send magic sign-in link
-                  </button>
-
-                  {magicLinkSent && (
-                    <div className="alert alert-success alert-custom mt-3">
-                      A sign-in link was sent to <strong>{email}</strong>. Check your email and open the link on the device where you want to sign in.
-                    </div>
-                  )}
-                </>
-              )}
 
               <p className="text-center mt-3 mb-0">
                 {isLogin ? (
