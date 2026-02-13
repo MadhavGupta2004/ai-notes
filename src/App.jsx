@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, isSignInWithEmailLink, signInWithEmailLink } from "firebase/auth";
 import { auth } from "./firebase";
-import Login from "./auth/login";
+import Login from "./auth/Login";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
 import Favorites from "./pages/Favorites";
