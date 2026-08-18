@@ -1,3 +1,7 @@
+// Groq decommissioned llama-3.1-8b-instant on 2026-08-16; gpt-oss-20b is the
+// recommended replacement. Override with GROQ_MODEL when the next one retires.
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+
 export async function handler(event) {
   try {
     // Validate API key
@@ -28,7 +32,10 @@ export async function handler(event) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
+          model: MODEL,
+          // gpt-oss spends completion tokens on reasoning before it writes the
+          // answer, so keep reasoning minimal and leave room for the summary.
+          ...(MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {}),
           messages: [
             {
               role: "system",
@@ -46,7 +53,7 @@ Summarize the given text into 4–6 concise bullet points.
             },
           ],
           temperature: 0.3,
-          max_tokens: 250,
+          max_completion_tokens: 1000,
         }),
       }
     );
@@ -62,15 +69,15 @@ Summarize the given text into 4–6 concise bullet points.
       };
     }
 
-    if (!data.choices || !data.choices[0]) {
+    const summary = data.choices?.[0]?.message?.content?.trim();
+
+    if (!summary) {
       throw new Error("Invalid AI response from Groq");
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        summary: data.choices[0].message.content,
-      }),
+      body: JSON.stringify({ summary }),
     };
   } catch (err) {
     console.error("Summarize function error:", err);

@@ -14,6 +14,7 @@ import {
   updateSummary,
   updateQuiz,
 } from "../firebaseDB";
+import { summarizeWithAI, generateQuizWithAI } from "../aiApi";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -262,24 +263,6 @@ export default function Dashboard() {
     }
   };
 
-  const summarizeWithAI = async (content) => {
-    const response = await fetch("/.netlify/functions/summarize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: content }),
-    });
-
-    const data = await response.json();
-
-    if (!data.summary) {
-      throw new Error(data.error || "AI summarization failed");
-    }
-
-    return data.summary;
-  };
-
   const extractTextFromPDF = async (file, onPageRead) => {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
@@ -317,22 +300,6 @@ export default function Dashboard() {
     return chunks;
   };
 
-  const generateQuizWithAI = async (content) => {
-    const response = await fetch("/.netlify/functions/generateQuiz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: content }),
-    });
-
-    const quiz = await response.json();
-
-    if (!Array.isArray(quiz)) {
-      throw new Error("Quiz generation failed");
-    }
-
-    return quiz;
-  };
-
   const handleGenerateQuiz = async (note) => {
     try {
       setAiLoading(true);
@@ -342,7 +309,8 @@ export default function Dashboard() {
       // Update note in Firestore
       await updateQuiz(note.id, quiz);
     } catch (err) {
-      alert("Quiz generation failed");
+      console.error(err);
+      alert(err.message || "Quiz generation failed");
     } finally {
       setAiLoading(false);
     }

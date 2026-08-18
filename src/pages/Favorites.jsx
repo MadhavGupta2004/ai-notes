@@ -8,6 +8,7 @@ import {
   toggleFavorite,
   updateSummary,
 } from "../firebaseDB";
+import { summarizeWithAI } from "../aiApi";
 
 export default function Favorites() {
   const navigate = useNavigate();
@@ -103,24 +104,6 @@ export default function Favorites() {
   const handleNoteClick = (note) => {
     setSelectedNote(note);
     setShowMobileContent(true);
-  };
-
-  const summarizeWithAI = async (content) => {
-    const response = await fetch("/.netlify/functions/summarize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: content }),
-    });
-
-    const data = await response.json();
-
-    if (!data.summary) {
-      throw new Error(data.error || "AI summarization failed");
-    }
-
-    return data.summary;
   };
 
   const handleSummarize = async (note) => {

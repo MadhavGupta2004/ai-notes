@@ -1,3 +1,20 @@
+// Groq decommissioned llama-3.1-8b-instant on 2026-08-16; gpt-oss-20b is the
+// recommended replacement. Override with GROQ_MODEL when the next one retires.
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+
+// The model still wraps JSON in prose or markdown fences now and then.
+function parseQuiz(raw) {
+  const cleaned = raw.replace(/```(?:json)?/gi, "").trim();
+  const start = cleaned.indexOf("[");
+  const end = cleaned.lastIndexOf("]");
+
+  if (start === -1 || end === -1) {
+    throw new Error("AI did not return a quiz in the expected format");
+  }
+
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
 export async function handler(event) {
   try {
     // Validate API key
@@ -28,7 +45,10 @@ export async function handler(event) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
+          model: MODEL,
+          // gpt-oss spends completion tokens on reasoning before it writes the
+          // answer, so keep reasoning minimal and leave room for the questions.
+          ...(MODEL.includes("gpt-oss") ? { reasoning_effort: "low" } : {}),
           messages: [
             {
               role: "system",
@@ -54,7 +74,7 @@ Format:
             }
           ],
           temperature: 0.4,
-          max_tokens: 700,
+          max_completion_tokens: 2000,
         }),
       }
     );
@@ -70,11 +90,13 @@ Format:
       };
     }
 
-    if (!data.choices) {
+    const content = data.choices?.[0]?.message?.content?.trim();
+
+    if (!content) {
       throw new Error("Invalid AI response from Groq");
     }
 
-    const quizJson = JSON.parse(data.choices[0].message.content);
+    const quizJson = parseQuiz(content);
 
     return {
       statusCode: 200,

@@ -5,3 +5,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Firebase's signInWithPopup polls window.closed on the Google popup, which the
+# default opener policy severs.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
